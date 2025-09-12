@@ -1,0 +1,50 @@
+System Architecture (How it works at runtime)
+This chart shows how the different pieces of the system communicate with each other once the app is running.
+
+plaintext
++-----------------+      +----------------------+      +--------------------+
+|                 |      |                      |      |                    |
+|  Mac (Control)  |      |  Android (S23/S24)   |      | Jetson Orin (Server) |
+| (Web Browser)   |      |  (CamControl App)    |      | (e.g., MediaMTX)   |
+|                 |      |                      |      |                    |
++-------+---------+      +----------+-----------+      +----------+---------+
+        |                        ^   |   ^                       |
+(1)     | Control Cmds           |   |   | (3) Video Stream      |
+(JSON)  | (e.g., Zoom)           |   |   | (RTSP/SRT/WebRTC)     |
+        |                        |   |   |                       |
+        +------------------------+   |   +----------------------->
+                                     |
+        <----------------------------+
+         (2) Video Stream (H.264 over WebSocket)
+         (For direct preview on your Mac)
+Explanation:
+
+Control (Mac → Android): You use the web browser on your Mac to send control commands (like "set zoom to 2.0x") as JSON messages over a WebSocket connection to the Android app.
+Direct Preview Stream (Android → Mac): This is what we have implemented right now. The Android app encodes the video and sends it directly to your web browser for a live preview. This is great for development and direct control.
+Server Stream (Android → Orin): This is the ultimate goal outlined in ProjectSetup.md. The Android app will send the high-quality video stream to a server application (like MediaMTX or LiveKit) running on the Jetson Orin. The Orin can then process this stream (e.g., run AI models) or re-stream it to other clients.
+Development Workflow (How you build it)
+This chart shows the "who does what" for development.
+
+plaintext
++--------------------------+      +--------------------------+      +-----------------------------+
+|     Android App Dev      |      |      Web Viewer Dev      |      |      Jetson Orin Dev        |
++--------------------------+      +--------------------------+      +-----------------------------+
+|                          |      |                          |      |                             |
+|   [On your Mac]          |      |   [On your Mac]          |      |   [Mac] <----SSH----> [Orin]|
+|   - Write Kotlin in      |      |   - Edit index.html      |      |   - Connect to Orin via SSH |
+|     Android Studio       |      |     (HTML/JS/CSS)        |      |   - Write Python/C++ code   |
+|           |              |      |           |              |      |     (e.g., in VS Code)      |
+|           v              |      |           v              |      |           |                 |
+|   - Build .apk file      |      |   - Open file in         |      |           v                 |
+|           |              |      |     Chrome/Firefox       |      |   - Run/Compile on Orin     |
+|           v (ADB)        |      |                          |      |   - Deploy Docker containers|
+|   [Android Phone]        |      |                          |      |                             |
+|   - Run & Debug App      |      |                          |      |                             |
+|                          |      |                          |      |                             |
++--------------------------+      +--------------------------+      +-----------------------------+
+Explanation:
+
+Android App: You do all the development in Android Studio on your Mac. When you hit "Run", it compiles the app and installs it on your connected Android phone via the Android Debug Bridge (ADB).
+Web Viewer: This is just a simple HTML file on your Mac. You edit it with any text editor and open it in your web browser. There's no complex build step.
+Jetson Orin: You are correct, you use your Mac to develop for the Orin. The standard way is to connect to the Orin from your Mac's terminal using SSH (ssh user@orin-ip-address). The Orin runs a full version of Linux (Ubuntu), so you can install compilers and tools directly on it.
+Cross-compiling? You don't need to worry about cross-compiling at this stage. That's a more advanced technique. For now, you can write and compile code directly on the Orin, which is much simpler and faster to get started with.

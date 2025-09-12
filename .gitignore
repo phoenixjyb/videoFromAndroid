@@ -1,0 +1,29 @@
+# Android build artifacts
+/.gradle/
+/.idea/
+/local.properties
+/build/
+/app/build/
+/app/**/build/
+
+# APKs and outputs
+*.apk
+*.aab
+/app/build/outputs/
+
+# Python venv and caches
+/.venv/
+__pycache__/
+*.pyc
+
+# Logs and recordings
+/logs/
+*.log
+*.mp4
+*.wav
+clip-*.mp4
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+

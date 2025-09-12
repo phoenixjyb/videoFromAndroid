@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Gradle: wrapper",
+      "type": "shell",
+      "command": "gradle wrapper --gradle-version 8.10.2",
+      "problemMatcher": []
+    },
+    {
+      "label": "Gradle: assembleDebug",
+      "type": "shell",
+      "command": "./gradlew assembleDebug",
+      "problemMatcher": ["$gcc"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Gradle: installDebug",
+      "type": "shell",
+      "command": "./gradlew installDebug",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "ADB: forward 8080",
+      "type": "shell",
+      "command": "adb forward tcp:8080 tcp:8080"
+    }
+  ]
+}

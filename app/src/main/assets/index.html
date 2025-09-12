@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CamControl Viewer</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #topbar {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #a33;
+            box-shadow: 0 0 6px rgba(0,0,0,0.4);
+        }
+        #host-input {
+            width: 170px;
+            background: #151515;
+            border: 1px solid #333;
+            color: #ddd;
+            padding: 4px 6px;
+            border-radius: 6px;
+        }
+        #video-canvas {
+            background-color: #000;
+            border: 1px solid #333;
+            width: 80%;
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
+        }
+        #status {
+            margin-top: 16px;
+            font-size: 1.2em;
+        }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #2a2a2a;
+            padding: 10px 20px;
+            border-radius: 8px;
+        }
+        #quick-row {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+        .btn {
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            padding: 6px 10px;
+            border-radius: 6px;
+            color: #ddd;
+            cursor: pointer;
+        }
+        .btn:disabled { opacity: 0.5; cursor: default; }
+        .btn.primary { background: #2d5; border-color: #2a4; color: #111; }
+        #zoom-slider {
+            width: 300px;
+        }
+        #zoom-value {
+            min-width: 50px;
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+<body>
+    <div id="topbar">
+        <span class="status-dot" id="status-dot" title="Disconnected"></span>
+        <span style="opacity:.8;">Host:</span>
+        <input id="host-input" type="text" placeholder="127.0.0.1">
+        <button class="btn" id="connect-btn">Connect</button>
+        <button class="btn" id="disconnect-btn">Disconnect</button>
+    </div>
+    <canvas id="video-canvas"></canvas>
+    <div id="status">Connecting...</div>
+    <div id="controls">
+        <label for="zoom-slider">Zoom:</label>
+        <input type="range" id="zoom-slider" min="1" max="10" step="0.1" value="1">
+        <span id="zoom-value">1.0x</span>
+        <div id="quick-row">
+            <button class="btn" id="zoom-dec">-</button>
+            <button class="btn" id="zoom-reset">Reset</button>
+            <button class="btn" id="zoom-inc">+</button>
+        </div>
+        <label style="margin-left:20px;">
+            <input type="checkbox" id="ae-lock"> AE Lock
+        </label>
+        <label>
+            <input type="checkbox" id="awb-lock"> AWB Lock
+        </label>
+        <button id="rec-btn" class="btn primary" style="margin-left:20px;">Start Rec</button>
+        <label style="margin-left:20px;">Profile:
+            <select id="profile-select">
+                <option value="1920x1080x30x0">1080p30</option>
+                <option value="3840x2160x30x0">4K30</option>
+                <option value="1920x1080x60x1">1080p60 (HS)</option>
+                <option value="1920x1080x120x1">1080p120 (HS)</option>
+            </select>
+        </label>
+        <label style="margin-left:20px;">Camera:
+            <select id="camera-select">
+                <option value="back">Back</option>
+                <option value="front">Front</option>
+            </select>
+        </label>
+    </div>
+    <div id="quick-row">
+        <button class="btn" data-prof="1920x1080x30x0">1080p30</button>
+        <button class="btn" data-prof="3840x2160x30x0">4K30</button>
+        <button class="btn" data-prof="1920x1080x60x1">1080p60 HS</button>
+        <button class="btn" data-prof="1920x1080x120x1">1080p120 HS</button>
+    </div>
+    <div id="telemetry" style="margin-top:12px; font-size: 0.95em; background:#1e1e1e; padding:10px 14px; border-radius:8px; width:80%; max-width:1280px;">
+        <div><b>AF</b>: <span id="t-af">-</span> | <b>AE</b>: <span id="t-ae">-</span> | <b>ISO</b>: <span id="t-iso">-</span> | <b>Exposure</b>: <span id="t-exp">-</span></div>
+        <div><b>Zoom</b>: <span id="t-zoom">-</span> | <b>FPS</b>: <span id="t-fps">-</span></div>
+    </div>
+    <!-- Broadway H.264 Decoder (optional). If it fails to load, controls still work. -->
+    <script src="https://mbebenita.github.io/Broadway/player/Broadway.js"></script>
+
+    <script>
+        // WebSocket host selection:
+        // - USB (adb forward): use 127.0.0.1
+        // - LAN/Wi‑Fi: use device IP or provide ?host=IP in URL
+        const urlHostParam = new URLSearchParams(location.search).get('host');
+        let WS_HOST = urlHostParam || (location.hostname || '127.0.0.1');
+
+        const canvas = document.getElementById('video-canvas');
+        const statusDiv = document.getElementById('status');
+        const statusDot = document.getElementById('status-dot');
+        const hostInput = document.getElementById('host-input');
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const zoomSlider = document.getElementById('zoom-slider');
+        const zoomValueSpan = document.getElementById('zoom-value');
+        const zoomDec = document.getElementById('zoom-dec');
+        const zoomInc = document.getElementById('zoom-inc');
+        const zoomReset = document.getElementById('zoom-reset');
+        const aeLock = document.getElementById('ae-lock');
+        const awbLock = document.getElementById('awb-lock');
+        const tAF = document.getElementById('t-af');
+        const tAE = document.getElementById('t-ae');
+        const tISO = document.getElementById('t-iso');
+        const tEXP = document.getElementById('t-exp');
+        const tZoom = document.getElementById('t-zoom');
+        const tFPS = document.getElementById('t-fps');
+        const recBtn = document.getElementById('rec-btn');
+        const profileSelect = document.getElementById('profile-select');
+        const cameraSelect = document.getElementById('camera-select');
+        const quickProfileButtons = Array.from(document.querySelectorAll('button[data-prof]'));
+        let recording = false;
+
+        // Initialize decoder if available; keep UI functional if not.
+        let player = null;
+        try {
+            if (window.H264 && H264.Player) {
+                player = new H264.Player(canvas);
+            } else {
+                console.warn('Broadway not available; video decode disabled');
+            }
+        } catch (e) {
+            console.warn('Broadway init failed; controls will still work', e);
+        }
+
+        let ws = null;
+
+        function setControlsEnabled(enabled) {
+            [zoomSlider, aeLock, awbLock, recBtn, profileSelect, cameraSelect, zoomDec, zoomInc, zoomReset, ...quickProfileButtons].forEach(el => {
+                if (el) el.disabled = !enabled;
+            });
+        }
+        function setStatus(connected) {
+            statusDot.style.background = connected ? '#2d5' : '#a33';
+            statusDot.title = connected ? 'Connected' : 'Disconnected';
+        }
+
+        function connect(host) {
+            if (ws) try { ws.close(); } catch {}
+            WS_HOST = host;
+            ws = new WebSocket(`ws://${WS_HOST}:9090/control`);
+            ws.binaryType = 'arraybuffer';
+            statusDiv.textContent = `Connecting to ${WS_HOST}...`;
+            setControlsEnabled(false);
+            setStatus(false);
+
+            ws.onopen = () => {
+                statusDiv.textContent = `Connected to ${WS_HOST}`;
+                setControlsEnabled(true);
+                setStatus(true);
+            };
+            ws.onclose = () => {
+                statusDiv.textContent = 'Disconnected';
+                setControlsEnabled(false);
+                setStatus(false);
+            };
+            ws.onerror = (err) => {
+                statusDiv.textContent = 'Error. Check DevTools console.';
+                console.error('WebSocket error', err);
+            };
+
+            ws.onmessage = (event) => {
+            if (typeof event.data === 'string') {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg && (msg.af !== undefined || msg.ae !== undefined)) {
+                        tAF.textContent = String(msg.af ?? '-');
+                        tAE.textContent = String(msg.ae ?? '-');
+                        tISO.textContent = String(msg.iso ?? '-');
+                        tEXP.textContent = (msg.expNs ? (msg.expNs / 1e6).toFixed(2) + ' ms' : '-');
+                        tZoom.textContent = (msg.zoom ? msg.zoom.toFixed(2) + 'x' : '-');
+                        tFPS.textContent = (msg.fps ? msg.fps.toFixed(1) : '-');
+                    }
+                } catch (e) { /* ignore non-JSON text */ }
+                return;
+            }
+            const bytes = new Uint8Array(event.data);
+            if (bytes && bytes.length && player && player.decode) {
+                player.decode(bytes);
+            }
+            };
+        }
+
+        zoomSlider.addEventListener('input', () => {
+            const zoomValue = parseFloat(zoomSlider.value);
+            zoomValueSpan.textContent = `${zoomValue.toFixed(1)}x`;
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const command = {
+                    cmd: "setZoomRatio", // This must match the @SerialName in Kotlin
+                    value: zoomValue
+                };
+                ws.send(JSON.stringify(command));
+            }
+        });
+
+        function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+        zoomDec.addEventListener('click', () => {
+            const v = clamp(parseFloat(zoomSlider.value) - 0.1, 1, parseFloat(zoomSlider.max));
+            zoomSlider.value = v.toFixed(1);
+            zoomSlider.dispatchEvent(new Event('input'));
+        });
+        zoomInc.addEventListener('click', () => {
+            const v = clamp(parseFloat(zoomSlider.value) + 0.1, 1, parseFloat(zoomSlider.max));
+            zoomSlider.value = v.toFixed(1);
+            zoomSlider.dispatchEvent(new Event('input'));
+        });
+        zoomReset.addEventListener('click', () => {
+            zoomSlider.value = '1.0';
+            zoomSlider.dispatchEvent(new Event('input'));
+        });
+
+        function sendToggle(cmd, value) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ cmd, value }));
+            }
+        }
+        aeLock.addEventListener('change', () => sendToggle('setAeLock', aeLock.checked));
+        awbLock.addEventListener('change', () => sendToggle('setAwbLock', awbLock.checked));
+
+        recBtn.addEventListener('click', () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            if (!recording) {
+                ws.send(JSON.stringify({ cmd: 'startRecording' }));
+                recording = true;
+                recBtn.textContent = 'Stop Rec';
+            } else {
+                ws.send(JSON.stringify({ cmd: 'stopRecording' }));
+                recording = false;
+                recBtn.textContent = 'Start Rec';
+            }
+        });
+
+        function sendProfileStr(profileStr) {
+            const [w,h,fps,hs] = profileStr.split('x').map(Number);
+            const cmd = { cmd: 'setVideoProfile', width: w, height: h, fps: fps, highSpeed: !!hs };
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(cmd));
+            }
+        }
+        profileSelect.addEventListener('change', () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            sendProfileStr(profileSelect.value);
+        });
+
+        quickProfileButtons.forEach(btn => btn.addEventListener('click', () => {
+            const val = btn.getAttribute('data-prof');
+            profileSelect.value = val;
+            profileSelect.dispatchEvent(new Event('change'));
+        }));
+
+        cameraSelect.addEventListener('change', () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            const facing = cameraSelect.value;
+            // Reset UI zoom to 1.0 on camera switch (do not emit zoom command)
+            zoomSlider.value = '1.0';
+            zoomValueSpan.textContent = '1.0x';
+            ws.send(JSON.stringify({ cmd: 'switchCamera', facing }));
+        });
+
+        // Initial host field and connection
+        hostInput.value = WS_HOST || '127.0.0.1';
+        connectBtn.addEventListener('click', () => connect(hostInput.value.trim() || '127.0.0.1'));
+        disconnectBtn.addEventListener('click', () => { if (ws) try { ws.close(); } catch {} });
+        connect(hostInput.value);
+    </script>
+  </body>
+</html>
