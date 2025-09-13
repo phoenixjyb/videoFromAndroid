@@ -392,15 +392,16 @@ class CamControlService : Service() {
     }
 
     private fun estimateBitrate(p: VideoProfile): Int {
+        // Slightly higher bits-per-pixel defaults for clearer Web preview
         val bpp = when {
-            p.width >= 3840 -> 0.12f
-            p.width >= 2560 -> 0.10f
-            p.width >= 1920 && p.fps > 60 -> 0.10f
-            p.width >= 1920 -> 0.08f
-            else -> 0.07f
+            p.width >= 3840 -> 0.18f        // 4K30 ≈ 50 Mbps (capped below)
+            p.width >= 2560 -> 0.14f
+            p.width >= 1920 && p.fps > 60 -> 0.12f
+            p.width >= 1920 -> 0.12f        // 1080p30 ≈ 9.3 Mbps
+            else -> 0.10f
         }
         val bitrate = (p.width * p.height * p.fps * bpp).toInt()
-        return bitrate.coerceIn(3_000_000, 35_000_000)
+        return bitrate.coerceIn(5_000_000, 50_000_000)
     }
 
     data class VideoProfile(val width: Int, val height: Int, val fps: Int, val highSpeed: Boolean)

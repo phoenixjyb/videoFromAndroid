@@ -329,14 +329,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun estimateBitrate(p: VideoProfile): Int {
         val bpp = when {
-            p.width >= 3840 -> 0.12f
-            p.width >= 2560 -> 0.10f
-            p.width >= 1920 && p.fps > 60 -> 0.10f
-            p.width >= 1920 -> 0.08f
-            else -> 0.07f
+            p.width >= 3840 -> 0.18f
+            p.width >= 2560 -> 0.14f
+            p.width >= 1920 && p.fps > 60 -> 0.12f
+            p.width >= 1920 -> 0.12f
+            else -> 0.10f
         }
         val bitrate = (p.width * p.height * p.fps * bpp).toInt()
-        return bitrate.coerceIn(3_000_000, 35_000_000)
+        return bitrate.coerceIn(5_000_000, 50_000_000)
     }
 
     data class VideoProfile(val width: Int, val height: Int, val fps: Int, val highSpeed: Boolean)
