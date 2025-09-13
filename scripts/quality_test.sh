@@ -20,7 +20,7 @@ USAGE
 HOST=${HOST:-127.0.0.1}
 PORT=${PORT:-9090}
 PROFILE=${PROFILE:-1920x1080x30x0}   # WxHxFPSxHS
-SECONDS=${SECONDS:-6}
+DURATION=${DURATION:-6}               # Use DURATION to avoid clashing with bash SECONDS
 OPEN=${OPEN:-1}
 
 declare -a MBPS_LIST=()
@@ -30,7 +30,7 @@ while [[ $# -gt 0 ]]; do
     --host) HOST=${2:-}; shift 2;;
     --port) PORT=${2:-}; shift 2;;
     --profile) PROFILE=${2:-}; shift 2;;
-    --seconds) SECONDS=${2:-}; shift 2;;
+    --seconds) DURATION=${2:-}; shift 2;;
     --open) OPEN=${2:-1}; shift 2;;
     --mbps) MBPS_LIST+=("${2:-}"); shift 2;;
     --[0-9]*) v=${1#--}; MBPS_LIST+=("${v}"); shift;;
@@ -43,7 +43,7 @@ if [[ ${#MBPS_LIST[@]} -eq 0 ]]; then
   MBPS_LIST+=("${MBPS:-12}")
 fi
 
-echo "[Quality Test] Host=${HOST} Port=${PORT} Profile=${PROFILE} Bitrates=${MBPS_LIST[*]} Mbps Duration=${SECONDS}s"
+echo "[Quality Test] Host=${HOST} Port=${PORT} Profile=${PROFILE} Bitrates=${MBPS_LIST[*]} Mbps Duration=${DURATION}s"
 
 echo "[1/6] Build + install"
 ./gradlew installDebug >/dev/null
@@ -73,10 +73,11 @@ for MBPS in "${MBPS_LIST[@]}"; do
   python scripts/ws_cmd.py --host ${HOST} --port ${PORT} set-bitrate ${bps} || true
   sleep 1
 
-  echo "[5/6] Capture ${SECONDS}s @ ${MBPS} Mbps"
-  raw="captures/qtest_${PROFILE}_${MBPS}Mbps_${SECONDS}s_${ts}.h264"
-  mp4="captures/qtest_${PROFILE}_${MBPS}Mbps_${SECONDS}s_${ts}.mp4"
-  python scripts/ws_save_h264.py --host ${HOST} --port ${PORT} --seconds ${SECONDS} --out "${raw}"
+  echo "[5/6] Capture ${DURATION}s @ ${MBPS} Mbps"
+  raw="captures/qtest_${PROFILE}_${MBPS}Mbps_${DURATION}s_${ts}.h264"
+  mp4="captures/qtest_${PROFILE}_${MBPS}Mbps_${DURATION}s_${ts}.mp4"
+  # Allow Ctrl+C to interrupt capture but still finalize below
+  python scripts/ws_save_h264.py --host ${HOST} --port ${PORT} --seconds ${DURATION} --out "${raw}" || true
 
   echo "[6/6] Summarize + remux for ${MBPS} Mbps"
   ls -lh "${raw}" | awk '{print "H264:",$5,$9}'
