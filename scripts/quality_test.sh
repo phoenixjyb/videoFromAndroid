@@ -8,7 +8,7 @@ set -euo pipefail
 
 usage() {
   cat <<USAGE
-Usage: $0 [--host IP] [--port N] [--profile WxHxFPSxHS] [--seconds N] [--open 0|1] [--mbps N] [--12] [--40] [...]
+Usage: $0 [--host IP] [--port N] [--profile WxHxFPSxHS] [--seconds N] [--open 0|1] [--mbps N] [--12] [--40] [--no-build-install]
 
 Examples:
   $0 --12                   # 1080p30 @ 12 Mbps, 6s (defaults)
@@ -22,6 +22,7 @@ PORT=${PORT:-9090}
 PROFILE=${PROFILE:-1920x1080x30x0}   # WxHxFPSxHS
 DURATION=${DURATION:-6}               # Use DURATION to avoid clashing with bash SECONDS
 OPEN=${OPEN:-1}
+SKIP_BI=${SKIP_BI:-0}                 # 1 to skip build+install
 
 declare -a MBPS_LIST=()
 
@@ -34,6 +35,7 @@ while [[ $# -gt 0 ]]; do
     --open) OPEN=${2:-1}; shift 2;;
     --mbps) MBPS_LIST+=("${2:-}"); shift 2;;
     --[0-9]*) v=${1#--}; MBPS_LIST+=("${v}"); shift;;
+    --no-build-install) SKIP_BI=1; shift;;
     -h|--help) usage; exit 0;;
     *) echo "Unknown arg: $1" >&2; usage; exit 1;;
   esac
@@ -45,8 +47,12 @@ fi
 
 echo "[Quality Test] Host=${HOST} Port=${PORT} Profile=${PROFILE} Bitrates=${MBPS_LIST[*]} Mbps Duration=${DURATION}s"
 
-echo "[1/6] Build + install"
-./gradlew installDebug >/dev/null
+if [[ "${SKIP_BI}" != "1" ]]; then
+  echo "[1/6] Build + install"
+  ./gradlew installDebug >/dev/null
+else
+  echo "[1/6] Skipping build + install (--no-build-install)"
+fi
 
 echo "[2/6] ADB forward + launch"
 adb forward tcp:${PORT} tcp:${PORT} >/dev/null || true

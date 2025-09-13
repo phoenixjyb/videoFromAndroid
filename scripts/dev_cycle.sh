@@ -5,9 +5,14 @@ set -euo pipefail
 
 PORT=${PORT:-9090}
 OPEN_BROWSER=${OPEN_BROWSER:-1}
+SKIP_BI=${SKIP_BI:-0}   # 1 to skip build+install
 
-echo "[1/4] Building + installing debug APK"
-./gradlew installDebug
+if [[ "${SKIP_BI}" != "1" ]]; then
+  echo "[1/4] Building + installing debug APK"
+  ./gradlew installDebug
+else
+  echo "[1/4] Skipping build + install (SKIP_BI=1)"
+fi
 
 echo "[2/4] ADB forward tcp:${PORT} -> tcp:${PORT}"
 adb forward tcp:${PORT} tcp:${PORT} || true
@@ -22,4 +27,3 @@ if [[ "${OPEN_BROWSER}" == "1" ]]; then
 fi
 
 echo "Done. Visit http://127.0.0.1:${PORT}"
-
