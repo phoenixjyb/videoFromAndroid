@@ -12,7 +12,31 @@ Key Features
 
 Directory
 - `ws_h264_gst.py` — main receiver/decoder
+- `ws_h264_rtsp_server.py` — WS→RTSP restream (rtsp://<orin-ip>:8554/cam)
 - `ARCHITECTURE.md` — design and next steps
+
+ROS 2 (Humble) — Image publisher
+- Package: `orin/ros2_camcontrol`
+- Node: `ws_to_image` subscribes to Android WS stream and publishes `sensor_msgs/Image` (RGB)
+
+Build (on Orin)
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-gi gir1.2-gstreamer-1.0 gstreamer1.0-tools \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+  nvidia-l4t-gstreamer
+python3 -m pip install websockets
+
+# RTSP restream
+python3 ws_h264_rtsp_server.py --host <android-ip>
+
+# ROS2 image publisher (Humble)
+source /opt/ros/humble/setup.bash
+cd ros2_camcontrol
+colcon build --symlink-install
+source install/setup.bash
+ros2 run ros2_camcontrol ws_to_image --host <android-ip> --topic /camera/image_rgb
+```
 
 Prerequisites (Jetson Orin)
 1) System packages (usually preinstalled on Jetson, otherwise install):
@@ -45,4 +69,3 @@ python3 ws_h264_gst.py --host 192.168.1.50 --sink fakesink --no-hw  # headless S
 Notes
 - If connecting via USB/ADB instead of LAN, forward the port on the host that has ADB, and route from Orin to that host.
 - The Android server emits Annex‑B samples with SPS/PPS before IDR; pipeline caps are set to `stream-format=byte-stream, alignment=au`.
-

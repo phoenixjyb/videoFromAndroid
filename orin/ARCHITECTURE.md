@@ -14,6 +14,11 @@ Components
   - `webrtcbin` for WebRTC publishing
   - `splitmuxsink` for local MP4 recording
 
+Implemented Modules
+- Display/Decode: `ws_h264_gst.py` (WS → Decode → Display)
+- RTSP Restream: `ws_h264_rtsp_server.py` (WS → RTP pay → RTSP server)
+- ROS2 Publisher: `ros2_camcontrol/ws_to_image.py` (WS → Decode → appsink → sensor_msgs/Image)
+
 Message Flow
 1) Android encodes Annex‑B H.264, broadcasts binary frames over WS; telemetry text frames intermixed.
 2) Orin WS client reads frames; binary frames → `appsrc`; text frames ignored or forwarded to a metrics bus (future).
@@ -24,3 +29,6 @@ Future Extensions
 - RTSP/WebRTC gateway: provide LAN‑friendly URLs for other consumers.
 - Resilience: WS reconnect, jitter buffer in `appsrc` pacing, health metrics.
 
+CUDA Considerations
+- For true GPU‑zero‑copy to CUDA, keep frames in NVMM (use `nvv4l2decoder ! nvvidconv ! video/x-raw(memory:NVMM),format=RGBA`) and interop via NvBufSurface/CUDA EGL.
+- The current ROS2 node publishes CPU `rgb8`. For CUDA ingestion, replace `appsink` with an NVIDIA sample interop (e.g., `appsink` with `memory:NVMM` and map with PyCUDA or use DeepStream’s `nvdsosd`/apps).
