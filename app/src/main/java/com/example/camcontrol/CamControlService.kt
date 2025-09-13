@@ -54,13 +54,19 @@ class CamControlService : Service() {
 
     private val telemetryReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.example.camcontrol.TELEMETRY") {
-                val payload = intent.getStringExtra("payload")
-                if (!payload.isNullOrEmpty()) {
-                    Log.d(TAG, "Telemetry intent received (${payload.length} bytes)")
-                    serviceScope.launch {
-                        try { controlServer.broadcastText(payload) } catch (_: Throwable) {}
+            when (intent?.action) {
+                "com.example.camcontrol.TELEMETRY" -> {
+                    val payload = intent.getStringExtra("payload")
+                    if (!payload.isNullOrEmpty()) {
+                        Log.d(TAG, "Telemetry intent received (${payload.length} bytes)")
+                        serviceScope.launch {
+                            try { controlServer.broadcastText(payload) } catch (_: Throwable) {}
+                        }
                     }
+                }
+                "com.example.camcontrol.REQUEST_ENCODER_SURFACE" -> {
+                    Log.d(TAG, "REQUEST_ENCODER_SURFACE received; rebroadcasting if ready")
+                    broadcastEncoderSurface()
                 }
             }
         }
@@ -213,7 +219,31 @@ class CamControlService : Service() {
                     }
                     is StartRecording-> serviceScope.launch { startRecording(command.name) }
                     is StopRecording -> serviceScope.launch { stopRecording() }
-                    is SetVideoProfile -> serviceScope.launch { restartPipeline(VideoProfile(command.width, command.height, command.fps, command.highSpeed)) }
+                    is SetVideoProfile -> {
+                        // Forward to Activity; Activity will restart camera pipeline.
+                        val intent = Intent("com.example.camcontrol.CAMERA_COMMAND").apply {
+                            setPackage(packageName)
+                            putExtra("command", "setVideoProfile")
+                            putExtra("width", command.width)
+                            putExtra("height", command.height)
+                            putExtra("fps", command.fps)
+                            putExtra("highSpeed", command.highSpeed)
+                        }
+                        sendBroadcast(intent)
+                        // Optionally reconfigure encoder to match; rebroadcast surface
+                        serviceScope.launch(Dispatchers.IO) {
+                            try {
+                                currentProfile = VideoProfile(command.width, command.height, command.fps, command.highSpeed)
+                                val br = estimateBitrate(currentProfile)
+                                videoEncoder.stop()
+                                videoEncoder.configure(currentProfile.width, currentProfile.height, currentProfile.fps, br)
+                                videoEncoder.start()
+                                broadcastEncoderSurface()
+                            } catch (t: Throwable) {
+                                Log.w(TAG, "Encoder reconfigure failed", t)
+                            }
+                        }
+                    }
                     is SwitchCamera -> {
                         Log.d(TAG, "📷 Camera switch command received: ${command.facing}")
                         val intent = Intent("com.example.camcontrol.CAMERA_COMMAND").apply {
@@ -231,9 +261,11 @@ class CamControlService : Service() {
         }
         Log.d(TAG, "✅ ControlServer created successfully")
 
-        // Receive telemetry from Activity and forward to WebSocket clients
+        // Receive telemetry from Activity and forward to WebSocket clients, and handle encoder surface requests
         try {
-            val filter = IntentFilter("com.example.camcontrol.TELEMETRY")
+            val filter = IntentFilter("com.example.camcontrol.TELEMETRY").apply {
+                addAction("com.example.camcontrol.REQUEST_ENCODER_SURFACE")
+            }
             if (Build.VERSION.SDK_INT >= 33) {
                 registerReceiver(telemetryReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
             } else {
@@ -254,6 +286,17 @@ class CamControlService : Service() {
             }
         }
         Log.d(TAG, "✅ VideoEncoder created")
+
+        // Start encoder and announce its input Surface to the Activity
+        try {
+            val p = currentProfile
+            val br = estimateBitrate(p)
+            videoEncoder.configure(p.width, p.height, p.fps, br)
+            videoEncoder.start()
+            broadcastEncoderSurface()
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to start encoder", t)
+        }
         
         Log.d(TAG, "📹 Creating VideoRecorder...")
         videoRecorder = VideoRecorder(this)
@@ -278,6 +321,24 @@ class CamControlService : Service() {
         //         Log.e(TAG, "Initial pipeline error", t)
         //     }
         // }
+    }
+
+    private fun broadcastEncoderSurface() {
+        val surf = videoEncoder.inputSurface ?: run {
+            Log.w(TAG, "Encoder surface unavailable; cannot broadcast")
+            return
+        }
+        val p = currentProfile
+        val intent = Intent("com.example.camcontrol.ENCODER_SURFACE").apply {
+            setPackage(packageName)
+            putExtra("width", p.width)
+            putExtra("height", p.height)
+            putExtra("fps", p.fps)
+            putExtra("highSpeed", p.highSpeed)
+            putExtra("surface", surf)
+        }
+        sendBroadcast(intent)
+        Log.d(TAG, "🎬 Encoder surface broadcasted: ${p.width}x${p.height}@${p.fps}")
     }
 
     private suspend fun startPipeline(profile: VideoProfile) {

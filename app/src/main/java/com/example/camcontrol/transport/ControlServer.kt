@@ -17,6 +17,8 @@ import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import io.ktor.server.response.respondBytes
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -61,6 +63,27 @@ class ControlServer(
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to load HTML: ${e.message}")
                                 call.respondText("Server is running. WebSocket endpoint: /control", ContentType.Text.Plain)
+                            }
+                        }
+                        // Serve static assets from the Android assets folder
+                        get("/assets/{path...}") {
+                            val pathSegments = call.parameters.getAll("path")
+                            val assetPath = pathSegments?.joinToString("/") ?: run {
+                                call.respondText("Missing asset path", status = HttpStatusCode.BadRequest)
+                                return@get
+                            }
+                            try {
+                                val bytes = this@ControlServer.context.assets.open(assetPath).use { it.readBytes() }
+                                val ct = when {
+                                    assetPath.endsWith(".js", true) -> ContentType.Application.JavaScript
+                                    assetPath.endsWith(".css", true) -> ContentType.Text.CSS
+                                    assetPath.endsWith(".wasm", true) -> ContentType.parse("application/wasm")
+                                    else -> ContentType.Application.OctetStream
+                                }
+                                call.respondBytes(bytes, ct)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Asset not found: $assetPath")
+                                call.respondText("Not Found", status = HttpStatusCode.NotFound)
                             }
                         }
                         webSocket("/control") {

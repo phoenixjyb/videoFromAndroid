@@ -138,8 +138,16 @@
         <div><b>AF</b>: <span id="t-af">-</span> | <b>AE</b>: <span id="t-ae">-</span> | <b>ISO</b>: <span id="t-iso">-</span> | <b>Exposure</b>: <span id="t-exp">-</span></div>
         <div><b>Zoom</b>: <span id="t-zoom">-</span> | <b>FPS</b>: <span id="t-fps">-</span></div>
     </div>
-    <!-- Broadway H.264 Decoder (optional). If it fails to load, controls still work. -->
-    <script src="https://mbebenita.github.io/Broadway/player/Broadway.js"></script>
+    <!-- Broadway H.264 Decoder: try local asset first, then CDN fallback. -->
+    <script>
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement('script'); s.src = src; s.async = true;
+          s.onload = () => resolve(true); s.onerror = () => reject(new Error('load failed: '+src));
+          document.head.appendChild(s);
+        });
+      }
+    </script>
 
     <script>
         // WebSocket host selection:
@@ -173,16 +181,181 @@
         const quickProfileButtons = Array.from(document.querySelectorAll('button[data-prof]'));
         let recording = false;
 
-        // Initialize decoder if available; keep UI functional if not.
-        let player = null;
-        try {
-            if (window.H264 && H264.Player) {
-                player = new H264.Player(canvas);
-            } else {
-                console.warn('Broadway not available; video decode disabled');
+        // Initialize decoder: try WebCodecs first, then Broadway; keep UI functional if neither.
+        let player = null;                  // Broadway player instance (if loaded)
+        let wcDecoder = null;               // WebCodecs VideoDecoder
+        let wcConfigured = false;
+        let wcTimestamp = 0;                // microseconds counter
+        let wcCtx = canvas.getContext('2d');
+
+        // Parse Annex-B bytestream into NAL units (Uint8Array)
+        function parseAnnexB(bytes) {
+            const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+            const units = [];
+            let i = 0;
+            const n = u8.length;
+            function isStart(p) {
+                return (p + 3 < n && u8[p] === 0 && u8[p+1] === 0 && u8[p+2] === 0 && u8[p+3] === 1) ||
+                       (p + 2 < n && u8[p] === 0 && u8[p+1] === 0 && u8[p+2] === 1);
             }
-        } catch (e) {
-            console.warn('Broadway init failed; controls will still work', e);
+            while (i < n) {
+                // find start code
+                while (i < n && !isStart(i)) i++;
+                if (i >= n) break;
+                // skip start code
+                const sc3 = (i + 2 < n && u8[i] === 0 && u8[i+1] === 0 && u8[i+2] === 1);
+                const sc4 = (i + 3 < n && u8[i] === 0 && u8[i+1] === 0 && u8[i+2] === 0 && u8[i+3] === 1);
+                i += sc4 ? 4 : 3;
+                const start = i;
+                // find next start
+                while (i < n && !isStart(i)) i++;
+                const end = i;
+                units.push(u8.subarray(start, end));
+            }
+            return units;
+        }
+
+        function findNal(units, types) {
+            for (const u of units) { const t = u[0] & 0x1F; if (types.includes(t)) return u; }
+            return null;
+        }
+
+        function buildAvcDecoderConfig(sps, pps) {
+            // AVCDecoderConfigurationRecord per ISO/IEC 14496-15
+            // [1][profile_idc][constraint_flags][level_idc][0xFF][numSPS=0xE1][spsLenHi][spsLenLo] sps ... [numPPS=1][ppsLenHi][ppsLenLo] pps ...
+            const profile_idc = sps[1];
+            const constraint = sps[2];
+            const level_idc = sps[3];
+            const len = 7 + 2 + sps.length + 1 + 2 + pps.length;
+            const cfg = new Uint8Array(len);
+            let o = 0;
+            cfg[o++] = 1;
+            cfg[o++] = profile_idc;
+            cfg[o++] = constraint;
+            cfg[o++] = level_idc;
+            cfg[o++] = 0xFF; // 6 bits reserved (111111) + lengthSizeMinusOne (11 -> 4 bytes)
+            cfg[o++] = 0xE1; // numOfSequenceParameterSets = 1
+            cfg[o++] = (sps.length >>> 8) & 0xFF;
+            cfg[o++] = (sps.length) & 0xFF;
+            cfg.set(sps, o); o += sps.length;
+            cfg[o++] = 1; // numOfPictureParameterSets
+            cfg[o++] = (pps.length >>> 8) & 0xFF;
+            cfg[o++] = (pps.length) & 0xFF;
+            cfg.set(pps, o);
+            return cfg;
+        }
+
+        function hasIdr(units) { return !!findNal(units, [5]); }
+
+        function resetWebCodecs() {
+            try { if (wcDecoder) wcDecoder.close(); } catch {}
+            wcDecoder = null;
+            wcConfigured = false;
+            wcTimestamp = 0;
+        }
+
+        async function initWebCodecs() {
+            if (!('VideoDecoder' in window)) return false;
+            try {
+                wcDecoder = new VideoDecoder({
+                    output: async (frame) => {
+                        try {
+                            if (window.createImageBitmap) {
+                                const bmp = await createImageBitmap(frame);
+                                wcCtx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+                                bmp.close();
+                            } else if (wcCtx && 'drawImage' in wcCtx) {
+                                wcCtx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+                            }
+                        } catch (e) {
+                            console.warn('WebCodecs draw error', e);
+                        } finally {
+                            try { frame.close(); } catch {}
+                        }
+                    },
+                    error: (e) => { console.warn('WebCodecs error', e); resetWebCodecs(); }
+                });
+                wcConfigured = false;
+                wcTimestamp = 0;
+                return true;
+            } catch (e) {
+                console.warn('WebCodecs init failed', e);
+                resetWebCodecs();
+                return false;
+            }
+        }
+
+        async function ensureDecoder() {
+            // Prefer WebCodecs if available
+            const okWC = await initWebCodecs();
+            if (okWC) return;
+            // Fallback to Broadway
+            try { await loadScript('/assets/broadway/Broadway.js'); } catch {}
+            if (!(window.H264 && H264.Player)) {
+                try { await loadScript('https://mbebenita.github.io/Broadway/Player/Broadway.js'); } catch {}
+            }
+            if (window.H264 && H264.Player) {
+                try { player = new H264.Player(canvas); } catch (e) { console.warn('Broadway init error', e); }
+            } else {
+                console.warn('Broadway/WebCodecs not available; video decode disabled');
+            }
+        }
+        ensureDecoder();
+
+        function annexBToAvcc(bytes) {
+            const units = parseAnnexB(bytes);
+            if (!units.length) return null;
+            let total = 0;
+            for (const u of units) total += 4 + u.length; // 4-byte length prefix
+            const out = new Uint8Array(total);
+            const v = new DataView(out.buffer);
+            let o = 0;
+            for (const u of units) {
+                v.setUint32(o, u.length); o += 4;
+                out.set(u, o); o += u.length;
+            }
+            return out;
+        }
+
+        function decodeWithWebCodecs(bytes) {
+            if (!wcDecoder || (wcDecoder.state && wcDecoder.state === 'closed')) return false;
+            const units = parseAnnexB(bytes);
+            if (!wcConfigured) {
+                const sps = findNal(units, [7]);
+                const pps = findNal(units, [8]);
+                if (sps && pps) {
+                    try {
+                        const description = buildAvcDecoderConfig(sps, pps);
+                        wcDecoder.configure({ codec: 'avc1.42E01E', description });
+                        wcConfigured = true;
+                    } catch (e) {
+                        console.warn('WebCodecs configure failed', e);
+                        resetWebCodecs();
+                        return false;
+                    }
+                } else {
+                    // Wait for SPS/PPS
+                    return true; // handled, just skip until config available
+                }
+            }
+            try {
+                const isKey = hasIdr(units);
+                // Convert Annex-B sample to AVCC length-prefixed format for WebCodecs
+                const avcc = annexBToAvcc(bytes);
+                if (!avcc) return true;
+                const chunk = new EncodedVideoChunk({
+                    type: isKey ? 'key' : 'delta',
+                    timestamp: wcTimestamp,
+                    data: avcc
+                });
+                wcTimestamp += 33333; // ~30 fps; visual only
+                wcDecoder.decode(chunk);
+                return true;
+            } catch (e) {
+                console.warn('WebCodecs decode error', e);
+                resetWebCodecs();
+                return false;
+            }
         }
 
         let ws = null;
@@ -210,11 +383,14 @@
                 statusDiv.textContent = `Connected to ${WS_HOST}`;
                 setControlsEnabled(true);
                 setStatus(true);
+                // Ensure decoder is ready each time we connect
+                ensureDecoder();
             };
             ws.onclose = () => {
                 statusDiv.textContent = 'Disconnected';
                 setControlsEnabled(false);
                 setStatus(false);
+                resetWebCodecs();
             };
             ws.onerror = (err) => {
                 statusDiv.textContent = 'Error. Check DevTools console.';
@@ -237,7 +413,14 @@
                 return;
             }
             const bytes = new Uint8Array(event.data);
-            if (bytes && bytes.length && player && player.decode) {
+            if (!bytes || !bytes.length) return;
+            // Try WebCodecs first
+            if (wcDecoder) {
+                const ok = decodeWithWebCodecs(bytes);
+                if (ok) return;
+            }
+            // Fallback to Broadway
+            if (player && player.decode) {
                 player.decode(bytes);
             }
             };

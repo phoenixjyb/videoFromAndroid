@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
 import android.view.SurfaceHolder
+import android.view.Surface
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -54,6 +55,7 @@ class MainActivity : AppCompatActivity() {
 
     private var cameraThread: HandlerThread? = null
     private var cameraHandler: Handler? = null
+    private var encoderSurface: Surface? = null
 
     private val cameraCommandReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -92,7 +94,7 @@ class MainActivity : AppCompatActivity() {
                                 cameraController.openCamera()
                                 cameraController.startCaptureSession(
                                     binding.previewView.holder.surface,
-                                    null,
+                                    encoderSurface,
                                     currentProfile.fps,
                                     currentProfile.highSpeed
                                 )
@@ -100,6 +102,44 @@ class MainActivity : AppCompatActivity() {
                                 Log.e("MainActivity", "Error switching camera", e)
                             }
                         }
+                    }
+                    "setVideoProfile" -> {
+                        val w = intent.getIntExtra("width", currentProfile.width)
+                        val h = intent.getIntExtra("height", currentProfile.height)
+                        val f = intent.getIntExtra("fps", currentProfile.fps)
+                        val hs = intent.getBooleanExtra("highSpeed", currentProfile.highSpeed)
+                        Log.d("MainActivity", "🎛️ Set video profile: ${w}x${h}@${f} HS=${hs}")
+                        val newP = VideoProfile(w, h, f, hs)
+                        activityScope.launch {
+                            try {
+                                restartPipeline(newP)
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Error applying video profile", e)
+                            }
+                        }
+                    }
+                }
+            } else if (intent?.action == "com.example.camcontrol.ENCODER_SURFACE") {
+                // Receive encoder input surface from service
+                val surf = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    intent.getParcelableExtra("surface", Surface::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra<Surface>("surface")
+                }
+                val w = intent?.getIntExtra("width", 0)
+                val h = intent?.getIntExtra("height", 0)
+                val f = intent?.getIntExtra("fps", 0)
+                encoderSurface = surf
+                Log.d("MainActivity", "🎬 Encoder surface received: ${w}x${h}@${f} (null=${encoderSurface==null})")
+                // If preview is active, restart session to include encoder
+                activityScope.launch {
+                    try {
+                        if (binding.previewView.holder.surface.isValid) {
+                            restartPipeline(currentProfile)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error restarting pipeline with encoder surface", e)
                     }
                 }
             }
@@ -130,7 +170,9 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Register broadcast receiver for camera commands from service
-        val filter = IntentFilter("com.example.camcontrol.CAMERA_COMMAND")
+        val filter = IntentFilter("com.example.camcontrol.CAMERA_COMMAND").apply {
+            addAction("com.example.camcontrol.ENCODER_SURFACE")
+        }
         Log.d("CamControl-MainActivity", "Registering broadcast receiver for camera commands")
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             registerReceiver(cameraCommandReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -255,10 +297,10 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Video encoding is now handled by CamControlService
-            Log.i("MainActivity", "📷 Opening camera for preview only...")
+            Log.i("MainActivity", "📷 Opening camera for preview/encode...")
             cameraController.openCamera()
             Log.i("MainActivity", "🎥 Starting capture session for preview...")
-            cameraController.startCaptureSession(surface, null, profile.fps, profile.highSpeed)
+            cameraController.startCaptureSession(surface, encoderSurface, profile.fps, profile.highSpeed)
             Log.i("MainActivity", "✅ Pipeline started successfully!")
         }
     }

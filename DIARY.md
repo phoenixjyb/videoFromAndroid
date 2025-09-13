@@ -58,3 +58,38 @@ Log (Recent Changes)
 - Hardened web client to separate text vs binary; added telemetry panel.
 - Added AE/AWB lock controls and command handling end-to-end.
 - Added MP4 recording via MediaMuxer; start/stop commands; UI button.
+
+2025-09-12 — Unified WS 9090, browser streaming fixed, capture tools
+- Unified networking on port 9090 end-to-end (server, UI, tests). Ktor binds 0.0.0.0.
+- Split responsibilities: Service runs the WebSocket server and encoder; Activity owns camera operations. Commands use explicit broadcasts.
+- Video streaming: Service broadcasts encoder Surface; Activity attaches it to capture session alongside preview. Binary H.264 frames are broadcast to WS clients.
+- Telemetry path: Activity encodes telemetry JSON and broadcasts to Service; Service forwards as WS text frames.
+- Web UI: Added WebCodecs-based H.264 decoding with Annex‑B→AVCC conversion and SPS/PPS config. Falls back to Broadway if unavailable. Decoder reset logic handles errors and reconnects.
+- Dev tools: Added scripts to test and debug
+  - `scripts/ws_probe.py` — quick binary/text probe
+  - `scripts/ws_save_h264.py` — save WS H.264 to file (waits for SPS/IDR), remux externally
+  - `scripts/ws_record.py` — trigger on-device MP4 record via WS
+  - `scripts/log.sh` — updated to forward 9090
+  - `scripts/webui.sh` — updated defaults for 9090
+- Tests: Updated WebSocket test scripts to 9090 and made them proxy-robust.
+- Housekeeping: Added `/assets` route in Ktor to serve local UI assets; removed root duplicates; expanded .gitignore to exclude captures.
+
+Open Items / Next Steps
+- Stream stability
+  - Smooth reconfigure on profile change; handshake between Service and Activity to ensure surfaces are valid before restarting.
+  - Improve encoder error handling and backoff; detect stalled pipelines.
+- Telemetry enrichment
+  - Push AE/AF mode/state strings; surface camera ID, lens facing; add dropped frame counters.
+  - Consider throttling or batching telemetry updates.
+- Controls
+  - Add exposure time/ISO sliders; tap-to-focus; exposure compensation.
+  - Persist last-used profile/locks/zoom across sessions.
+- UI/Player
+  - Small status indicator: decoder in use (WebCodecs/Broadway), FPS, client count.
+  - Optional MSE path (mp4 fragments) or WebRTC for broader browser compatibility/latency.
+- Recording
+  - Add audio path (Mic/AudioRecord + AAC) and mux into MP4; toggle in UI.
+  - Filename templating and download helper via ADB pull script.
+- Packaging/DevEx
+  - Add make targets or Gradle tasks for ADB forward, logs, and capture.
+  - CI lint/build workflow; pre-commit hooks for Kotlin/JS formatting.

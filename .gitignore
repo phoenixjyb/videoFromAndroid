@@ -10,6 +10,8 @@
 *.apk
 *.aab
 /app/build/outputs/
+*.h264
+captures/
 
 # Python venv and caches
 /.venv/
@@ -26,4 +28,3 @@ clip-*.mp4
 # OS/editor files
 .DS_Store
 Thumbs.db
-
