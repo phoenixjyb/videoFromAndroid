@@ -54,15 +54,15 @@ class VideoEncoder(
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
             setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL)
-            // Make stream Broadway-friendly: Baseline profile, CBR if available
-            try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline) } catch (_: Throwable) {}
-            try { setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel31) } catch (_: Throwable) {}
+            // Prefer higher profile for quality (WebCodecs capable); fallback silently if not supported
+            try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileHigh) } catch (_: Throwable) {
+                try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain) } catch (_: Throwable) {}
+            }
+            try { setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel4) } catch (_: Throwable) {}
             try { setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR) } catch (_: Throwable) {}
             // Prepend SPS/PPS to IDR (framework key where supported)
             try { setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1) } catch (_: Throwable) {}
-            // Qualcomm-specific hints (ignored on others)
-            try { setInteger("vendor.qti-ext-enc-profile-level.profile", MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline) } catch (_: Throwable) {}
-            try { setInteger("vendor.qti-ext-enc-profile-level.level", MediaCodecInfo.CodecProfileLevel.AVCLevel31) } catch (_: Throwable) {}
+            // Remove vendor-specific overrides to avoid conflicts with profile selection
         }
 
         // Cancel any existing drain job to prevent concurrent access

@@ -51,6 +51,7 @@ class CamControlService : Service() {
     private val json = Json { classDiscriminator = "cmd"; ignoreUnknownKeys = true }
     private var currentProfile = VideoProfile(1920, 1080, 30, highSpeed = false)
     private val defaultProfile = VideoProfile(1920, 1080, 30, highSpeed = false)
+    @Volatile private var currentBitrate: Int? = null
 
     private val telemetryReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -234,13 +235,35 @@ class CamControlService : Service() {
                         serviceScope.launch(Dispatchers.IO) {
                             try {
                                 currentProfile = VideoProfile(command.width, command.height, command.fps, command.highSpeed)
-                                val br = estimateBitrate(currentProfile)
+                                val req = currentBitrate ?: estimateBitrate(currentProfile)
+                                val br = capBitrateForProfile(currentProfile, req)
                                 videoEncoder.stop()
                                 videoEncoder.configure(currentProfile.width, currentProfile.height, currentProfile.fps, br)
                                 videoEncoder.start()
                                 broadcastEncoderSurface()
                             } catch (t: Throwable) {
                                 Log.w(TAG, "Encoder reconfigure failed", t)
+                            }
+                        }
+                    }
+                    is SetBitrate -> {
+                        Log.d(TAG, "🎛️ Bitrate change requested: ${command.bitrate}")
+                        // Deduplicate and clamp to reasonable range for current profile
+                        val applied = capBitrateForProfile(currentProfile, command.bitrate)
+                        if (currentBitrate == applied) {
+                            Log.d(TAG, "Bitrate unchanged (applied=${applied})")
+                            return@ControlServer
+                        }
+                        currentBitrate = applied
+                        serviceScope.launch(Dispatchers.IO) {
+                            try {
+                                val p = currentProfile
+                                videoEncoder.stop()
+                                videoEncoder.configure(p.width, p.height, p.fps, applied)
+                                videoEncoder.start()
+                                broadcastEncoderSurface()
+                            } catch (t: Throwable) {
+                                Log.w(TAG, "Bitrate reconfigure failed", t)
                             }
                         }
                     }
@@ -290,7 +313,7 @@ class CamControlService : Service() {
         // Start encoder and announce its input Surface to the Activity
         try {
             val p = currentProfile
-            val br = estimateBitrate(p)
+            val br = capBitrateForProfile(p, currentBitrate ?: estimateBitrate(p))
             videoEncoder.configure(p.width, p.height, p.fps, br)
             videoEncoder.start()
             broadcastEncoderSurface()
@@ -402,6 +425,23 @@ class CamControlService : Service() {
         }
         val bitrate = (p.width * p.height * p.fps * bpp).toInt()
         return bitrate.coerceIn(5_000_000, 50_000_000)
+    }
+
+    private fun capBitrateForProfile(p: VideoProfile, requested: Int): Int {
+        // Conservative caps to avoid encoder instability across devices.
+        val max = when {
+            p.width >= 3840 -> 45_000_000
+            p.width >= 2560 -> 35_000_000
+            p.width >= 1920 && p.fps > 60 -> 28_000_000
+            p.width >= 1920 -> 20_000_000
+            else -> 12_000_000
+        }
+        val min = 2_000_000
+        val applied = requested.coerceIn(min, max)
+        if (applied != requested) {
+            Log.d(TAG, "Bitrate clamped: requested=${requested} applied=${applied} for ${p.width}x${p.height}@${p.fps}")
+        }
+        return applied
     }
 
     data class VideoProfile(val width: Int, val height: Int, val fps: Int, val highSpeed: Boolean)

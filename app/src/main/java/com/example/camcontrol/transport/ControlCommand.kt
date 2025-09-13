@@ -43,3 +43,10 @@ data class SwitchCamera(
     // Accepts "back" or "front"; future: cameraId
     val facing: String
 ) : ControlCommand()
+
+@Serializable
+@SerialName("setBitrate")
+data class SetBitrate(
+    // Bitrate in bits per second
+    val bitrate: Int
+) : ControlCommand()

@@ -39,7 +39,8 @@ def _has_sps_or_idr(buf: bytes) -> bool:
 
 async def dump_h264(uri: str, out_path: str, seconds: float, wait_keyframe: bool):
     disable_proxies()
-    started = time.time()
+    started_connect = time.time()
+    started_write = None  # start timer at first written AU to avoid short clips
     count_bytes = 0
     count_frames = 0
     text_msgs = 0
@@ -53,7 +54,8 @@ async def dump_h264(uri: str, out_path: str, seconds: float, wait_keyframe: bool
                     msg = await asyncio.wait_for(ws.recv(), timeout=5)
                 except asyncio.TimeoutError:
                     # keep waiting while within time budget
-                    if time.time() - started > seconds:
+                    base = started_write or started_connect
+                    if time.time() - base > seconds:
                         break
                     else:
                         continue
@@ -62,12 +64,14 @@ async def dump_h264(uri: str, out_path: str, seconds: float, wait_keyframe: bool
                         started_writing = _has_sps_or_idr(msg)
                         if not started_writing:
                             continue
+                        started_write = time.time()
                     f.write(msg)
                     count_bytes += len(msg)
                     count_frames += 1
                 else:
                     text_msgs += 1
-                if time.time() - started > seconds:
+                base = started_write or started_connect
+                if time.time() - base > seconds:
                     break
     print(f"Done. Frames: {count_frames}, Bytes: {count_bytes}. Text msgs: {text_msgs}")
 
