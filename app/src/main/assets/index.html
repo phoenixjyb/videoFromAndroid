@@ -559,6 +559,11 @@
         codecSelect.addEventListener('change', () => {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
             const codec = codecSelect.value;
+            if (codec === 'h265') {
+                // Warn: many browsers do not decode HEVC via WebCodecs.
+                console.warn('HEVC selected: Web preview may not decode in this browser. Orin ingest/RTSP recommended.');
+                decLabel.textContent = 'HEVC (preview may fail)';
+            }
             ws.send(JSON.stringify({ cmd: 'setCodec', codec }));
         });
 

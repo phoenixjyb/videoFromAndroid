@@ -31,12 +31,13 @@ def disable_proxies():
 
 
 class WsH264Receiver:
-    def __init__(self, host: str, port: int, sink: str, use_hw: bool):
+    def __init__(self, host: str, port: int, sink: str, use_hw: bool, codec: str):
         self.host = host
         self.port = port
         self.url = f"ws://{host}:{port}/control"
         self.use_hw = use_hw
         self.sink = sink
+        self.codec = codec.lower()
         self.pipeline = None
         self.appsrc = None
         self.loop = None
@@ -50,16 +51,22 @@ class WsH264Receiver:
         return Gst.ElementFactory.find(name) is not None
 
     def _build_pipeline(self):
-        # Caps for Annex-B byte stream with AU alignment (SPS/PPS+IDR are in stream)
-        caps = 'video/x-h264,stream-format=byte-stream,alignment=au'
+        # Caps for Annex-B byte stream with AU alignment (SPS/PPS/IDR present)
+        if self.codec == 'h265' or self.codec == 'hevc':
+            caps = 'video/x-h265,stream-format=byte-stream,alignment=au'
+            parse = 'h265parse config-interval=-1'
+        else:
+            caps = 'video/x-h264,stream-format=byte-stream,alignment=au'
+            parse = 'h264parse config-interval=-1'
 
         # Choose decoder path
         hw_ok = self.use_hw and self._has_factory('nvv4l2decoder')
         if hw_ok:
-            decode = 'h264parse config-interval=-1 ! nvv4l2decoder enable-max-performance=1 ! nvvidconv ! nvegltransform'
+            decode = f'{parse} ! nvv4l2decoder enable-max-performance=1 ! nvvidconv ! nvegltransform'
             sink = self.sink or 'nveglglessink sync=false'
         else:
-            decode = 'h264parse config-interval=-1 ! avdec_h264 ! videoconvert'
+            swdec = 'avdec_h264' if 'h264' in caps else 'avdec_h265'
+            decode = f'{parse} ! {swdec} ! videoconvert'
             sink = self.sink or 'autovideosink sync=false'
 
         desc = f"appsrc name=src is-live=true format=time do-timestamp=true caps={caps} ! {decode} ! {sink}"
@@ -180,12 +187,12 @@ def main():
     p.add_argument('--port', type=int, default=9090)
     p.add_argument('--sink', default='', help='GStreamer sink element (default nveglglessink or autovideosink)')
     p.add_argument('--no-hw', action='store_true', help='Disable hardware decoder (force software)')
+    p.add_argument('--codec', default='h264', help='h264 or h265')
     args = p.parse_args()
 
-    r = WsH264Receiver(args.host, args.port, args.sink, use_hw=not args.no_hw)
+    r = WsH264Receiver(args.host, args.port, args.sink, use_hw=not args.no_hw, codec=args.codec)
     r.start()
 
 
 if __name__ == '__main__':
     main()
-

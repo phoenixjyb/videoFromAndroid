@@ -11,8 +11,8 @@ Key Features
 - Configurable sink (e.g., `nveglglessink`, `fakesink`) and host/port.
 
 Directory
-- `ws_h264_gst.py` — main receiver/decoder
-- `ws_h264_rtsp_server.py` — WS→RTSP restream (rtsp://<orin-ip>:8554/cam)
+- `ws_h264_gst.py` — main receiver/decoder (add `--codec h264|h265`)
+- `ws_h264_rtsp_server.py` — WS→RTSP restream (rtsp://<orin-ip>:8554/cam, add `--codec h264|h265`)
 - `ARCHITECTURE.md` — design and next steps
 
 ROS 2 (Humble) — Image publisher
@@ -28,7 +28,7 @@ sudo apt-get install -y python3-gi gir1.2-gstreamer-1.0 gstreamer1.0-tools \
 python3 -m pip install websockets
 
 # RTSP restream
-python3 ws_h264_rtsp_server.py --host <android-ip>
+python3 ws_h264_rtsp_server.py --host <android-ip> --codec h264
 
 # ROS2 image publisher (Humble)
 source /opt/ros/humble/setup.bash
@@ -59,10 +59,11 @@ Usage
 ```bash
 # On Jetson Orin
 cd orin
-python3 ws_h264_gst.py --host <android-ip> --port 9090 --sink nveglglessink
+python3 ws_h264_gst.py --host <android-ip> --port 9090 --sink nveglglessink --codec h264
 
 # Examples
-python3 ws_h264_gst.py --host 192.168.1.50               # defaults to 9090 + nveglglessink
+python3 ws_h264_gst.py --host 192.168.1.50               # defaults to 9090 + nveglglessink (h264)
+python3 ws_h264_gst.py --host 192.168.1.50 --codec h265   # HEVC (requires decoder support)
 python3 ws_h264_gst.py --host 192.168.1.50 --sink fakesink --no-hw  # headless SW decode
 ```
 

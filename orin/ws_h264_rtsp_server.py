@@ -88,14 +88,20 @@ def main():
     ap.add_argument('--port', type=int, default=9090)
     ap.add_argument('--mount', default='/cam')
     ap.add_argument('--rtsp-port', type=int, default=8554)
+    ap.add_argument('--codec', default='h264', help='h264 or h265')
     args = ap.parse_args()
 
     disable_proxies()
     Gst.init(None)
 
     # Build RTSP factory
-    caps = 'video/x-h264,stream-format=byte-stream,alignment=au'
-    launch = f"appsrc name=src is-live=true format=time do-timestamp=true caps={caps} ! h264parse config-interval=-1 ! rtph264pay name=pay0 pt=96"
+    if args.codec.lower() in ('h265','hevc'):
+        caps = 'video/x-h265,stream-format=byte-stream,alignment=au'
+        pay = 'rtph265pay'
+    else:
+        caps = 'video/x-h264,stream-format=byte-stream,alignment=au'
+        pay = 'rtph264pay'
+    launch = f"appsrc name=src is-live=true format=time do-timestamp=true caps={caps} ! {('h265parse' if '265' in caps else 'h264parse')} config-interval=-1 ! {pay} name=pay0 pt=96"
     factory = WSRTSPFactory()
     factory.set_launch(launch)
     factory.set_latency(100)
@@ -122,4 +128,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
