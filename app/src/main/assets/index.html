@@ -94,6 +94,10 @@
         <input id="host-input" type="text" placeholder="127.0.0.1">
         <button class="btn" id="connect-btn">Connect</button>
         <button class="btn" id="disconnect-btn">Disconnect</button>
+        <span style="margin-left:10px; opacity:.8;">Decoder:</span>
+        <span id="dec-label" style="min-width:80px; display:inline-block;">-</span>
+        <span style="margin-left:10px; opacity:.8;">Client FPS:</span>
+        <span id="client-fps" style="min-width:50px; display:inline-block;">-</span>
     </div>
     <canvas id="video-canvas"></canvas>
     <div id="status">Connecting...</div>
@@ -187,6 +191,8 @@
         const bitrateSlider = document.getElementById('bitrate-slider');
         const bitrateValue = document.getElementById('bitrate-value');
         const kfBtn = document.getElementById('kf-btn');
+        const decLabel = document.getElementById('dec-label');
+        const clientFpsSpan = document.getElementById('client-fps');
         let recording = false;
 
         // Initialize decoder: try WebCodecs first, then Broadway; keep UI functional if neither.
@@ -195,6 +201,24 @@
         let wcConfigured = false;
         let wcTimestamp = 0;                // microseconds counter
         let wcCtx = canvas.getContext('2d');
+        let decoderName = '-';
+
+        // Simple client FPS smoothing
+        let fpsCount = 0;
+        let fpsLast = performance.now();
+        let fpsSmoothed = null;
+        function tickClientFps() {
+            const now = performance.now();
+            fpsCount++;
+            const dt = now - fpsLast;
+            if (dt >= 1000) {
+                const inst = fpsCount * 1000 / dt;
+                fpsSmoothed = fpsSmoothed == null ? inst : (0.8 * fpsSmoothed + 0.2 * inst);
+                clientFpsSpan.textContent = fpsSmoothed.toFixed(1);
+                fpsCount = 0;
+                fpsLast = now;
+            }
+        }
 
         // Parse Annex-B bytestream into NAL units (Uint8Array)
         function parseAnnexB(bytes) {
@@ -260,6 +284,10 @@
             wcDecoder = null;
             wcConfigured = false;
             wcTimestamp = 0;
+            if (decoderName === 'WebCodecs') {
+                decoderName = '-';
+                decLabel.textContent = decoderName;
+            }
         }
 
         async function initWebCodecs() {
@@ -285,6 +313,8 @@
                 });
                 wcConfigured = false;
                 wcTimestamp = 0;
+                decoderName = 'WebCodecs';
+                decLabel.textContent = decoderName;
                 return true;
             } catch (e) {
                 console.warn('WebCodecs init failed', e);
@@ -303,9 +333,11 @@
                 try { await loadScript('https://mbebenita.github.io/Broadway/Player/Broadway.js'); } catch {}
             }
             if (window.H264 && H264.Player) {
-                try { player = new H264.Player(canvas); } catch (e) { console.warn('Broadway init error', e); }
+                try { player = new H264.Player(canvas); decoderName = 'Broadway'; decLabel.textContent = decoderName; } catch (e) { console.warn('Broadway init error', e); }
             } else {
                 console.warn('Broadway/WebCodecs not available; video decode disabled');
+                decoderName = 'None';
+                decLabel.textContent = decoderName;
             }
         }
         ensureDecoder();
@@ -422,6 +454,7 @@
             }
             const bytes = new Uint8Array(event.data);
             if (!bytes || !bytes.length) return;
+            tickClientFps();
             // Try WebCodecs first
             if (wcDecoder) {
                 const ok = decodeWithWebCodecs(bytes);
