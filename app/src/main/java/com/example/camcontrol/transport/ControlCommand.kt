@@ -50,3 +50,7 @@ data class SetBitrate(
     // Bitrate in bits per second
     val bitrate: Int
 ) : ControlCommand()
+
+@Serializable
+@SerialName("requestKeyFrame")
+object RequestKeyFrame : ControlCommand()

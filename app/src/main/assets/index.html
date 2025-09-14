@@ -131,6 +131,7 @@
                 <option value="front">Front</option>
             </select>
         </label>
+        <button class="btn" id="kf-btn" style="margin-left:20px;">Keyframe</button>
     </div>
     <div id="quick-row">
         <button class="btn" data-prof="1920x1080x30x0">1080p30</button>
@@ -185,6 +186,7 @@
         const quickProfileButtons = Array.from(document.querySelectorAll('button[data-prof]'));
         const bitrateSlider = document.getElementById('bitrate-slider');
         const bitrateValue = document.getElementById('bitrate-value');
+        const kfBtn = document.getElementById('kf-btn');
         let recording = false;
 
         // Initialize decoder: try WebCodecs first, then Broadway; keep UI functional if neither.
@@ -507,6 +509,11 @@
             zoomSlider.value = '1.0';
             zoomValueSpan.textContent = '1.0x';
             ws.send(JSON.stringify({ cmd: 'switchCamera', facing }));
+        });
+
+        kfBtn.addEventListener('click', () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            ws.send(JSON.stringify({ cmd: 'requestKeyFrame' }));
         });
 
         // Bitrate control (Mbps → bps)

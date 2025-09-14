@@ -74,6 +74,37 @@ Log (Recent Changes)
 - Tests: Updated WebSocket test scripts to 9090 and made them proxy-robust.
 - Housekeeping: Added `/assets` route in Ktor to serve local UI assets; removed root duplicates; expanded .gitignore to exclude captures.
 
+2025-09-13 — Android Sprint 1 plan + kickoff
+- Goals (Android‑first toward production):
+  1) Fast recovery + predictability during reconfigure
+     - Force keyframe on demand and after reconfigure (DONE: requestKeyFrame command wired end‑to‑end; GOP set to 1s)
+     - Shorter GOP (I‑frame interval 1s) to speed up decoder lock and reduce black frames after changes (DONE)
+  2) Bitrate control + stability
+     - End‑to‑end bitrate command (UI → WS → Service → Encoder) (DONE)
+     - Clamp bitrate by resolution to avoid encoder stalls/freezes (DONE)
+     - UI debounce to avoid thrashing (DONE)
+     - Next: basic adaptive downshift if WS send stalls; upshift on recovery
+  3) Resilience
+     - WS broadcast timeout + drop oldest to avoid head‑of‑line blocking (NEXT)
+     - Watchdog to restart encoder/camera on exceptions (NEXT)
+  4) Security & Config
+     - Add token auth on WS + optional WSS (NEXT)
+     - Persist last profile/bitrate/locks (NEXT)
+  5) UX & Observability
+     - UI status: decoder type (WebCodecs/Broadway), FPS, WS backlog (NEXT)
+     - Telemetry enrich: AF/AE strings, drops, encoder fps (NEXT)
+
+Kickoff changes in this sprint:
+- New command: requestKeyFrame → triggers MediaCodec sync frame; UI adds “Keyframe” button.
+- Encoder: GOP reduced to 1 second; prefer AVC High/Main profiles.
+- Bitrate: service clamps by resolution; persists manual value across profile changes.
+- Capture tooling: ws_save_h264 waits full DURATION after first keyframe for accurate clip length.
+
+Acceptance (Android sprint 1):
+- Reconfig (profile/bitrate/camera switch) yields <1s to first decoded frame and no freezes across 10 runs.
+- Bitrate changes visibly affect quality within clamps; no app freeze at highest permitted values.
+- UI shows live decoder type and FPS; basic reconnect works (manual reload acceptable in v1).
+
 Open Items / Next Steps
 - Stream stability
   - Smooth reconfigure on profile change; handshake between Service and Activity to ensure surfaces are valid before restarting.

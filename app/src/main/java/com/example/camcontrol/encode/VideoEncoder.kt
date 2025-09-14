@@ -31,7 +31,7 @@ class VideoEncoder(
     companion object {
         private const val TAG = "VideoEncoder"
         private const val MIME_TYPE = MediaFormat.MIMETYPE_VIDEO_AVC
-        private const val I_FRAME_INTERVAL = 2
+        private const val I_FRAME_INTERVAL = 1
         private val START_CODE = byteArrayOf(0x00, 0x00, 0x00, 0x01)
     }
 
@@ -148,6 +148,18 @@ class VideoEncoder(
         mediaCodec = null
         _inputSurface = null
         codecConfigAnnexB = null
+    }
+
+    fun requestKeyFrame() {
+        try {
+            val codec = mediaCodec ?: return
+            val b = android.os.Bundle()
+            b.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+            codec.setParameters(b)
+            Log.d(TAG, "Requested keyframe")
+        } catch (t: Throwable) {
+            Log.w(TAG, "requestKeyFrame failed", t)
+        }
     }
 
     private fun byteBufferToArray(bb: ByteBuffer): ByteArray {

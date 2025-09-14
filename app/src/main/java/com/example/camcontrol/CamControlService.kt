@@ -277,6 +277,10 @@ class CamControlService : Service() {
                         sendBroadcast(intent)
                         Log.d(TAG, "📡 Camera switch broadcast sent: action=${intent.action}, command=${intent.getStringExtra("command")}, facing=${intent.getStringExtra("facing")}")
                     }
+                    is RequestKeyFrame -> {
+                        Log.d(TAG, "🎬 RequestKeyFrame received")
+                        try { videoEncoder.requestKeyFrame() } catch (_: Throwable) {}
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to parse command: $commandString", e)
