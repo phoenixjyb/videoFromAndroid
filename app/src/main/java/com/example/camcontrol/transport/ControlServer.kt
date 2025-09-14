@@ -16,12 +16,16 @@ import io.ktor.http.ContentType
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
+import io.ktor.websocket.CloseReason
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import io.ktor.server.response.respondBytes
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import java.util.Collections
 
 class ControlServer(
@@ -35,6 +39,7 @@ class ControlServer(
     companion object {
         private const val TAG = "ControlServer"
         private const val PORT = 9090
+        private const val SEND_TIMEOUT_MS = 75L
     }
 
     fun start() {
@@ -131,16 +136,34 @@ class ControlServer(
     suspend fun broadcastVideoData(data: ByteArray) {
         if (connections.isEmpty()) return
         val frame = Frame.Binary(true, data)
-        connections.forEach {
-            it.send(frame.copy())
+        val snapshot = synchronized(connections) { connections.toList() }
+        snapshot.forEach { session ->
+            sendSafe(session, frame)
         }
     }
 
     suspend fun broadcastText(text: String) {
         if (connections.isEmpty()) return
         val frame = Frame.Text(text)
-        connections.forEach {
-            it.send(frame.copy())
+        val snapshot = synchronized(connections) { connections.toList() }
+        snapshot.forEach { session ->
+            sendSafe(session, frame)
+        }
+    }
+
+    private suspend fun sendSafe(session: io.ktor.websocket.WebSocketSession, frame: Frame) {
+        try {
+            withTimeout(SEND_TIMEOUT_MS) {
+                session.send(frame.copy())
+            }
+        } catch (t: TimeoutCancellationException) {
+            Log.w(TAG, "send timeout; dropping slow client")
+            try { session.close(CloseReason(CloseReason.Codes.GOING_AWAY, "send timeout")) } catch (_: Throwable) {}
+            connections -= session
+        } catch (t: Throwable) {
+            Log.w(TAG, "send error; removing client: ${t.message}")
+            try { session.close(CloseReason(CloseReason.Codes.UNEXPECTED_CONDITION, "send error")) } catch (_: Throwable) {}
+            connections -= session
         }
     }
 }
