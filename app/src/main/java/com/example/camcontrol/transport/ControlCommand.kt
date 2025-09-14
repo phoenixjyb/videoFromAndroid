@@ -54,3 +54,10 @@ data class SetBitrate(
 @Serializable
 @SerialName("requestKeyFrame")
 object RequestKeyFrame : ControlCommand()
+
+@Serializable
+@SerialName("setCodec")
+data class SetCodec(
+    // "h264" or "h265"
+    val codec: String
+) : ControlCommand()

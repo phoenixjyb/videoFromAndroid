@@ -238,7 +238,7 @@ class CamControlService : Service() {
                                 val req = currentBitrate ?: estimateBitrate(currentProfile)
                                 val br = capBitrateForProfile(currentProfile, req)
                                 videoEncoder.stop()
-                                videoEncoder.configure(currentProfile.width, currentProfile.height, currentProfile.fps, br)
+                                videoEncoder.configure(currentProfile.width, currentProfile.height, currentProfile.fps, br, currentCodec)
                                 videoEncoder.start()
                                 broadcastEncoderSurface()
                             } catch (t: Throwable) {
@@ -259,7 +259,7 @@ class CamControlService : Service() {
                             try {
                                 val p = currentProfile
                                 videoEncoder.stop()
-                                videoEncoder.configure(p.width, p.height, p.fps, applied)
+                                videoEncoder.configure(p.width, p.height, p.fps, applied, currentCodec)
                                 videoEncoder.start()
                                 broadcastEncoderSurface()
                             } catch (t: Throwable) {
@@ -276,6 +276,25 @@ class CamControlService : Service() {
                         }
                         sendBroadcast(intent)
                         Log.d(TAG, "📡 Camera switch broadcast sent: action=${intent.action}, command=${intent.getStringExtra("command")}, facing=${intent.getStringExtra("facing")}")
+                    }
+                    is SetCodec -> {
+                        val value = command.codec.lowercase()
+                        val mapped = if (value == "h265" || value == "hevc") "h265" else "h264"
+                        Log.d(TAG, "🎚️ Codec change requested: ${mapped}")
+                        if (currentCodec == mapped) return@ControlServer
+                        currentCodec = mapped
+                        serviceScope.launch(Dispatchers.IO) {
+                            try {
+                                val p = currentProfile
+                                val br = currentBitrate ?: estimateBitrate(p)
+                                videoEncoder.stop()
+                                videoEncoder.configure(p.width, p.height, p.fps, br, currentCodec)
+                                videoEncoder.start()
+                                broadcastEncoderSurface()
+                            } catch (t: Throwable) {
+                                Log.w(TAG, "Codec reconfigure failed", t)
+                            }
+                        }
                     }
                     is RequestKeyFrame -> {
                         Log.d(TAG, "🎬 RequestKeyFrame received")

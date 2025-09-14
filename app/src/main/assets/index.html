@@ -135,6 +135,12 @@
                 <option value="front">Front</option>
             </select>
         </label>
+        <label style="margin-left:20px;">Codec:
+            <select id="codec-select" title="H.265 may not decode in browser">
+                <option value="h264">H.264</option>
+                <option value="h265">H.265 (HEVC)</option>
+            </select>
+        </label>
         <button class="btn" id="kf-btn" style="margin-left:20px;">Keyframe</button>
     </div>
     <div id="quick-row">
@@ -191,6 +197,7 @@
         const bitrateSlider = document.getElementById('bitrate-slider');
         const bitrateValue = document.getElementById('bitrate-value');
         const kfBtn = document.getElementById('kf-btn');
+        const codecSelect = document.getElementById('codec-select');
         const decLabel = document.getElementById('dec-label');
         const clientFpsSpan = document.getElementById('client-fps');
         let recording = false;
@@ -547,6 +554,12 @@
         kfBtn.addEventListener('click', () => {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
             ws.send(JSON.stringify({ cmd: 'requestKeyFrame' }));
+        });
+
+        codecSelect.addEventListener('change', () => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            const codec = codecSelect.value;
+            ws.send(JSON.stringify({ cmd: 'setCodec', codec }));
         });
 
         // Bitrate control (Mbps → bps)

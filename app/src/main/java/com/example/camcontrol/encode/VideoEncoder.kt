@@ -30,7 +30,8 @@ class VideoEncoder(
 
     companion object {
         private const val TAG = "VideoEncoder"
-        private const val MIME_TYPE = MediaFormat.MIMETYPE_VIDEO_AVC
+        private const val MIME_TYPE_AVC = MediaFormat.MIMETYPE_VIDEO_AVC
+        private const val MIME_TYPE_HEVC = MediaFormat.MIMETYPE_VIDEO_HEVC
         private const val I_FRAME_INTERVAL = 1
         private val START_CODE = byteArrayOf(0x00, 0x00, 0x00, 0x01)
     }
@@ -39,36 +40,48 @@ class VideoEncoder(
     private var height = 1080
     private var frameRate = 30
     private var bitRate = 8 * 1024 * 1024
+    private var mimeType: String = MIME_TYPE_AVC
 
-    fun configure(width: Int, height: Int, fps: Int, bitrate: Int) {
+    fun configure(width: Int, height: Int, fps: Int, bitrate: Int, codec: String? = null) {
         this.width = width
         this.height = height
         this.frameRate = fps
         this.bitRate = bitrate
+        codec?.let {
+            this.mimeType = when (it.lowercase()) {
+                "h265", "hevc" -> MIME_TYPE_HEVC
+                else -> MIME_TYPE_AVC
+            }
+        }
     }
 
     fun start() {
         Log.d(TAG, "Starting encoder...")
-        val format = MediaFormat.createVideoFormat(MIME_TYPE, width, height).apply {
+        val format = MediaFormat.createVideoFormat(mimeType, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
             setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL)
-            // Prefer higher profile for quality (WebCodecs capable); fallback silently if not supported
-            try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileHigh) } catch (_: Throwable) {
-                try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain) } catch (_: Throwable) {}
+            if (mimeType == MIME_TYPE_AVC) {
+                // H.264 profiles
+                try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileHigh) } catch (_: Throwable) {
+                    try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain) } catch (_: Throwable) {}
+                }
+                try { setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel4) } catch (_: Throwable) {}
+            } else {
+                // H.265 profiles
+                try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain) } catch (_: Throwable) {}
+                try { setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel4) } catch (_: Throwable) {}
             }
-            try { setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel4) } catch (_: Throwable) {}
             try { setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR) } catch (_: Throwable) {}
             // Prepend SPS/PPS to IDR (framework key where supported)
             try { setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1) } catch (_: Throwable) {}
-            // Remove vendor-specific overrides to avoid conflicts with profile selection
         }
 
         // Cancel any existing drain job to prevent concurrent access
         drainJob?.cancel()
         
-        mediaCodec = MediaCodec.createEncoderByType(MIME_TYPE).apply {
+        mediaCodec = MediaCodec.createEncoderByType(mimeType).apply {
             configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             _inputSurface = createInputSurface()
             start()
