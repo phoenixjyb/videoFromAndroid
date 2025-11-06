@@ -404,10 +404,17 @@
                 if (sps && pps) {
                     try {
                         const description = buildAvcDecoderConfig(sps, pps);
-                        wcDecoder.configure({ codec: 'avc1.42E01E', description });
+                        // Build codec string from SPS: avc1.PPCCLL (profile, constraint, level in hex)
+                        const profile = sps[1].toString(16).padStart(2, '0');
+                        const constraint = sps[2].toString(16).padStart(2, '0');
+                        const level = sps[3].toString(16).padStart(2, '0');
+                        const codecString = `avc1.${profile}${constraint}${level}`;
+                        console.log(`📺 Configuring WebCodecs decoder: ${codecString} (profile=${sps[1]}, level=${sps[3]})`);
+                        wcDecoder.configure({ codec: codecString, description });
                         wcConfigured = true;
+                        console.log('✅ WebCodecs decoder configured successfully');
                     } catch (e) {
-                        console.warn('WebCodecs configure failed', e);
+                        console.error('❌ WebCodecs configure failed:', e);
                         resetWebCodecs();
                         return false;
                     }

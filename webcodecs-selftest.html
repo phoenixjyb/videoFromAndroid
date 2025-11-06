@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Edge WebCodecs Self‑Test</title>
+  <style>
+    :root { --bg:#0b1020; --fg:#e6eefc; --muted:#9fb3d9; --card:#141b34; }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,"Liberation Mono","Courier New",monospace}
+    header{padding:18px 20px;border-bottom:1px solid #223}
+    h1{margin:0;font-size:18px}
+    main{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;padding:16px;align-items:start}
+    .card{background:var(--card);border:1px solid #223;border-radius:14px;padding:14px;box-shadow:0 6px 30px rgba(0,0,0,.25)}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    button{background:#2b59ff;color:white;border:none;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+    button.secondary{background:#223046}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    pre{white-space:pre-wrap;max-height:60vh;overflow:auto;margin:0;font-size:12px;color:var(--muted)}
+    canvas, video{width:100%;background:#000;border-radius:10px}
+    small{color:var(--muted)}
+    code{color:#b5d1ff}
+    footer{padding:12px 16px;color:var(--muted);border-top:1px solid #223}
+    .ok{color:#75e46b}
+    .bad{color:#ff7a7a}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Edge WebCodecs Self‑Test</h1>
+    <small>Single HTML file. Works best on Edge ≥ 94. For webcam tests use <b>https://</b> or <b>localhost</b>.</small>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Controls</h2>
+      <div class="row">
+        <button id="btn-detect">1) Feature / Codec Support</button>
+        <button id="btn-rt" class="secondary">2) Synthetic Encode ➜ Decode</button>
+        <button id="btn-webcam" class="secondary">3) Webcam Frames ➜ Decoder</button>
+        <button id="btn-clear" class="secondary">Clear Log</button>
+      </div>
+      <p><small>Tip: Run steps in order. If Step 1 shows green checks, Step 2 should draw a color‑bar frame below. Step 3 requests camera permission and shows live frames.</small></p>
+      <pre id="log" aria-live="polite"></pre>
+    </section>
+    <section class="card">
+      <h2>Output</h2>
+      <canvas id="out" width="640" height="360"></canvas>
+      <video id="preview" playsinline muted hidden></video>
+      <p><small>Canvas shows decoded frames. Open DevTools → Console for detailed errors if any.</small></p>
+    </section>
+  </main>
+  <footer>
+    <small>© WebCodecs diagnostic helper. Remember to <code>close()</code> frames and <code>flush()</code> encoders/decoders.</small>
+  </footer>
+
+  <script>
+  (function(){
+    const $ = sel => document.querySelector(sel);
+    const logEl = $('#log');
+    const out = $('#out');
+    const ctx = out.getContext('2d');
+    const preview = $('#preview');
+
+    function log(msg, cls){
+      const ts = new Date().toLocaleTimeString();
+      const line = document.createElement('div');
+      if(cls) line.classList.add(cls);
+      line.textContent = `[${ts}] ${msg}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function hr(){ log('—'.repeat(40)); }
+
+    function supportBadge(ok, label){
+      log(`${ok ? '✔' : '✖'} ${label}`, ok ? 'ok' : 'bad');
+    }
+
+    async function detect(){
+      log('Running feature detection…'); hr();
+      const base = ['EncodedVideoChunk','VideoFrame','VideoDecoder','VideoEncoder'];
+      for(const k of base){ supportBadge(k in window, `${k} in window`); }
+
+      // Check a short list of common codecs
+      const codecCandidates = [
+        {name:'H.264/AVC', conf:{codec:'avc1.42001E', width:640, height:360}},
+        {name:'VP8',      conf:{codec:'vp8', width:640, height:360}},
+        {name:'VP9',      conf:{codec:'vp09.00.10.08', width:640, height:360}},
+        {name:'AV1',      conf:{codec:'av01.0.04M.08', width:640, height:360}},
+      ];
+      if (!('VideoDecoder' in window)) return;
+
+      for(const {name, conf} of codecCandidates){
+        try {
+          const sup = await VideoDecoder.isConfigSupported({codec: conf.codec, codedWidth: conf.width, codedHeight: conf.height});
+          supportBadge(!!sup.supported, `Decoder: ${name} (${conf.codec})`);
+        } catch(e){ supportBadge(false, `Decoder: ${name} (${conf.codec})`); log(String(e),'bad'); }
+      }
+
+      if (!('VideoEncoder' in window)) return;
+      for(const {name, conf} of codecCandidates){
+        try {
+          const sup = await VideoEncoder.isConfigSupported({codec: conf.codec, width: conf.width, height: conf.height, bitrate: 500_000, framerate: 30});
+          supportBadge(!!sup.supported, `Encoder: ${name} (${conf.codec})`);
+        } catch(e){ supportBadge(false, `Encoder: ${name} (${conf.codec})`); log(String(e),'bad'); }
+      }
+      hr();
+      log('Feature detection complete.');
+    }
+
+    // Create a synthetic test frame (color bars + text)
+    function makeTestFrame(w=640,h=360){
+      const c = new OffscreenCanvas(w,h);
+      const g = c.getContext('2d');
+      const bars = ['#e53935','#fb8c00','#fdd835','#43a047','#1e88e5','#8e24aa'];
+      const bw = Math.ceil(w/bars.length);
+      bars.forEach((col,i)=>{ g.fillStyle = col; g.fillRect(i*bw,0,bw,h); });
+      g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(0,h-60,w,60);
+      g.fillStyle = '#fff'; g.font = '24px ui-monospace';
+      g.fillText('WebCodecs round‑trip test', 16, h-26);
+      return new VideoFrame(c, {timestamp: 0});
+    }
+
+    async function roundTrip(){
+      log('Starting synthetic encode ➜ decode round‑trip…'); hr();
+      if(!('VideoEncoder' in window) || !('VideoDecoder' in window)){
+        log('VideoEncoder/VideoDecoder missing. Aborting.','bad'); return;
+      }
+
+      // Choose a working codec based on isConfigSupported
+      const candidates = ['vp8','avc1.42001E','vp09.00.10.08','av01.0.04M.08'];
+      let chosen = null;
+      for(const cdc of candidates){
+        try{ const sup = await VideoEncoder.isConfigSupported({codec: cdc, width:640, height:360, bitrate: 500_000, framerate: 30});
+          if(sup.supported){ chosen = cdc; break; }
+        }catch{ /* ignore */ }
+      }
+      if(!chosen){ log('No supported encoder config found.','bad'); return; }
+      log(`Using codec: ${chosen}`,'ok');
+
+      // Collect encoded chunks
+      const chunks = [];
+      const encoder = new VideoEncoder({
+        output: (chunk, meta)=>{ chunks.push({chunk, meta}); },
+        error: e => log('Encoder error: '+e,'bad')
+      });
+      const encConf = {codec: chosen, width: 640, height: 360, bitrate: 700_000, framerate: 30, avc:{format:'annexb'}};
+      encoder.configure(encConf);
+
+      const frame = makeTestFrame(640,360);
+      encoder.encode(frame, {keyFrame: true});
+      await encoder.flush();
+      frame.close();
+      log(`Encoded ${chunks.length} chunk(s).`);
+
+      // Decode and draw
+      const decoder = new VideoDecoder({
+        output: (vf)=>{
+          try{
+            // draw to visible canvas
+            createImageBitmap(vf).then(bmp=>{
+              ctx.clearRect(0,0,out.width,out.height);
+              ctx.drawImage(bmp, 0, 0, out.width, out.height);
+              bmp.close && bmp.close();
+            });
+          } finally {
+            vf.close();
+          }
+        },
+        error: e => log('Decoder error: '+e,'bad')
+      });
+
+      // Pick a decoder config compatible with the encoder
+      const decConf = {codec: chosen, codedWidth: 640, codedHeight: 360};
+      decoder.configure(decConf);
+
+      for(const {chunk} of chunks){ decoder.decode(chunk); }
+      await decoder.flush();
+
+      encoder.close();
+      decoder.close();
+      log('Round‑trip completed. Check the canvas on the right.','ok');
+      hr();
+    }
+
+    async function webcamTest(){
+      log('Requesting webcam (requires https/localhost)…'); hr();
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:360}, audio:false});
+        preview.srcObject = stream; preview.hidden = false; await preview.play();
+        supportBadge(true,'Got webcam stream');
+
+        // Process frames via MediaStreamTrackProcessor if available
+        if('MediaStreamTrackProcessor' in window){
+          log('Using MediaStreamTrackProcessor to read frames…');
+          const [track] = stream.getVideoTracks();
+          const proc = new MediaStreamTrackProcessor({track});
+          const reader = proc.readable.getReader();
+
+          (async function loop(){
+            const {value: frame, done} = await reader.read();
+            if(done){ log('Track ended'); return; }
+            try{
+              const bmp = await createImageBitmap(frame);
+              ctx.drawImage(bmp,0,0,out.width,out.height);
+              bmp.close && bmp.close();
+            } catch(e){ log('Frame draw error: '+e,'bad'); }
+            finally{ frame.close(); }
+            requestAnimationFrame(loop);
+          })();
+        } else {
+          log('MediaStreamTrackProcessor not supported. Falling back to drawImage(video)…','bad');
+          (function loop(){ ctx.drawImage(preview,0,0,out.width,out.height); requestAnimationFrame(loop); })();
+        }
+      }catch(e){
+        supportBadge(false,'Webcam access failed');
+        log(String(e),'bad');
+      }
+      hr();
+    }
+
+    $('#btn-detect').addEventListener('click', detect);
+    $('#btn-rt').addEventListener('click', roundTrip);
+    $('#btn-webcam').addEventListener('click', webcamTest);
+    $('#btn-clear').addEventListener('click', ()=>{ logEl.textContent=''; ctx.clearRect(0,0,out.width,out.height); });
+  })();
+  </script>
+</body>
+</html>
