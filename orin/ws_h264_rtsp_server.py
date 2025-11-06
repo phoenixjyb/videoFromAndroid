@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Jetson Orin — Restream Android WS H.264 to RTSP using GStreamer
+Jetson Orin — Restream Android WS H.26x to RTSP using GStreamer
 
 Publishes an RTSP mount point (rtsp://<orin-ip>:8554/cam) and feeds it with
-the H.264 Annex-B stream received over WebSocket from the Android phone.
+the Annex-B video stream (H.264/H.265) received over WebSocket from the Android phone.
 
-Pipeline inside RTSP factory:
-  appsrc name=src is-live=true format=time do-timestamp=true caps=video/x-h264,stream-format=byte-stream,alignment=au
-  ! h264parse config-interval=-1
-  ! rtph264pay name=pay0 pt=96
+Pipeline inside RTSP factory (caps/parse/pay adapt to the selected codec):
+  appsrc name=src is-live=true format=time do-timestamp=true caps=video/x-h26x,stream-format=byte-stream,alignment=au
+  ! h264parse/h265parse config-interval=-1
+  ! rtph264pay/rtph265pay name=pay0 pt=96
 """
 import argparse
 import asyncio
@@ -88,7 +88,7 @@ def main():
     ap.add_argument('--port', type=int, default=9090)
     ap.add_argument('--mount', default='/cam')
     ap.add_argument('--rtsp-port', type=int, default=8554)
-    ap.add_argument('--codec', default='h264', help='h264 or h265')
+    ap.add_argument('--codec', default='h265', help='h264 or h265')
     args = ap.parse_args()
 
     disable_proxies()

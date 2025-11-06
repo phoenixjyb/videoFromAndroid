@@ -54,7 +54,7 @@ class CamControlService : Service() {
     private var currentProfile = VideoProfile(1920, 1080, 30, highSpeed = false)
     private val defaultProfile = VideoProfile(1920, 1080, 30, highSpeed = false)
     @Volatile private var currentBitrate: Int? = null
-    @Volatile private var currentCodec: String = "h264"  // Track current codec for quality optimization
+    @Volatile private var currentCodec: String = "h265"
     private val encoderMutex = Mutex()  // Prevent concurrent encoder reconfigurations
 
     private val telemetryReceiver = object : android.content.BroadcastReceiver() {
@@ -355,7 +355,7 @@ class CamControlService : Service() {
         try {
             val p = currentProfile
             val br = capBitrateForProfile(p, currentBitrate ?: estimateBitrate(p))
-            videoEncoder.configure(p.width, p.height, p.fps, br)
+            videoEncoder.configure(p.width, p.height, p.fps, br, currentCodec)
             videoEncoder.start()
             broadcastEncoderSurface()
         } catch (t: Throwable) {
@@ -409,7 +409,7 @@ class CamControlService : Service() {
         withContext(Dispatchers.IO) {
             updateNotification("Starting ${profile.width}x${profile.height}@${profile.fps}")
             val targetBitrate = estimateBitrate(profile)
-            videoEncoder.configure(profile.width, profile.height, profile.fps, targetBitrate)
+            videoEncoder.configure(profile.width, profile.height, profile.fps, targetBitrate, currentCodec)
             videoEncoder.start()
             val encoderSurface = videoEncoder.inputSurface ?: throw IllegalStateException("Encoder input surface unavailable")
             cameraController.openCamera()

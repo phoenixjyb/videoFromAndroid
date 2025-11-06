@@ -11,8 +11,8 @@ Key Features
 - Configurable sink (e.g., `nveglglessink`, `fakesink`) and host/port.
 
 Directory
-- `ws_h264_gst.py` — main receiver/decoder (add `--codec h264|h265`)
-- `ws_h264_rtsp_server.py` — WS→RTSP restream (rtsp://<orin-ip>:8554/cam, add `--codec h264|h265`)
+- `ws_h264_gst.py` — main receiver/decoder (defaults to HEVC; add `--codec h264` if needed)
+- `ws_h264_rtsp_server.py` — WS→RTSP restream (rtsp://<orin-ip>:8554/cam, defaults to HEVC)
 - `ARCHITECTURE.md` — design and next steps
 
 ROS 2 (Humble) — Image publisher
@@ -62,8 +62,8 @@ cd orin
 python3 ws_h264_gst.py --host <android-ip> --port 9090 --sink nveglglessink --codec h264
 
 # Examples
-python3 ws_h264_gst.py --host 192.168.1.50               # defaults to 9090 + nveglglessink (h264)
-python3 ws_h264_gst.py --host 192.168.1.50 --codec h265   # HEVC (requires decoder support)
+python3 ws_h264_gst.py --host 192.168.1.50               # defaults to 9090 + nveglglessink (h265)
+python3 ws_h264_gst.py --host 192.168.1.50 --codec h264   # Force H.264 if the phone switches back
 python3 ws_h264_gst.py --host 192.168.1.50 --sink fakesink --no-hw  # headless SW decode
 ```
 

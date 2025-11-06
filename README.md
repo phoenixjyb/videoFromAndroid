@@ -84,16 +84,18 @@ PROJECT_STATUS_SUMMARY.md    # Snapshot of current status
 
 ### Orin — Display/Decode
 - Install deps (Jetson): `python3-gi`, `gir1.2-gstreamer-1.0`, GStreamer plugins, `nvidia-l4t-gstreamer`, `websockets`.
-- Run: `python3 orin/ws_h264_gst.py --host <android-ip>`
+- Run: `python3 orin/ws_h264_gst.py --host <android-ip> --codec h265` (default codec is now HEVC; add `--codec h264` if you revert the phone encoder)
 
 ### Orin — RTSP Restream
-- `python3 orin/ws_h264_rtsp_server.py --host <android-ip>`
+- `python3 orin/ws_h264_rtsp_server.py --host <android-ip> --codec h265`
 - Play: `rtsp://<orin-ip>:8554/cam`
 
 ### Orin — ROS2 Image Publisher
 - ROS2 Humble: `source /opt/ros/humble/setup.bash`
 - Build: `cd orin/ros2_camcontrol && colcon build --symlink-install && source install/setup.bash`
-- Run: `ros2 run ros2_camcontrol ws_to_image --host <android-ip> --topic /camera/image_rgb`
+- Run: `ros2 run ros2_camcontrol ws_to_image --host <android-ip> --topic /recomo/rgb --rate 10 --codec h265`
+  - Add `--camera-info-file <path>` to load calibration YAML/JSON and publish `camera_info`.
+  - Use `--camera-info-topic` or `--frame-id` to match downstream expectations.
 
 ## What’s Done
 - Unified WS port 9090; single WS carries control/telemetry/video.
@@ -121,4 +123,3 @@ PROJECT_STATUS_SUMMARY.md    # Snapshot of current status
 
 ---
 For the Chinese version, see [README_zh.md](README_zh.md).
-

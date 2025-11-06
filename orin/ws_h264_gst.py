@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Jetson Orin H.264 over WebSocket receiver with GStreamer decode
+Jetson Orin H.26x over WebSocket receiver with GStreamer decode
 
 Connects to ws://<host>:<port>/control, reads binary H.264 Annex-B frames,
 and feeds them to a GStreamer pipeline using appsrc. Uses NVDEC (nvv4l2decoder)
@@ -42,7 +42,8 @@ class WsH264Receiver:
         self.appsrc = None
         self.loop = None
         self.ws_task = None
-        self.queue = queue.Queue(maxsize=512)
+        # Keep the staging queue shallow so we minimise added latency.
+        self.queue = queue.Queue(maxsize=64)
         self._running = threading.Event()
         self._running.set()
         self._pts = 0
@@ -91,7 +92,7 @@ class WsH264Receiver:
     def _push_from_queue(self):
         # Called periodically in the GLib main loop
         pushed = 0
-        while pushed < 32:
+        while pushed < 16:
             try:
                 data = self.queue.get_nowait()
             except queue.Empty:
@@ -143,7 +144,8 @@ class WsH264Receiver:
         bus.connect('message', self._on_bus, loop)
 
         # Periodic queue drain
-        GLib.timeout_add(5, self._push_from_queue)
+        # Drain the WebSocket queue aggressively for lower end-to-end latency.
+        GLib.timeout_add(1, self._push_from_queue)
 
         # Start pipeline
         self.pipeline.set_state(Gst.State.PLAYING)
@@ -187,7 +189,7 @@ def main():
     p.add_argument('--port', type=int, default=9090)
     p.add_argument('--sink', default='', help='GStreamer sink element (default nveglglessink or autovideosink)')
     p.add_argument('--no-hw', action='store_true', help='Disable hardware decoder (force software)')
-    p.add_argument('--codec', default='h264', help='h264 or h265')
+    p.add_argument('--codec', default='h265', help='h264 or h265')
     args = p.parse_args()
 
     r = WsH264Receiver(args.host, args.port, args.sink, use_hw=not args.no_hw, codec=args.codec)

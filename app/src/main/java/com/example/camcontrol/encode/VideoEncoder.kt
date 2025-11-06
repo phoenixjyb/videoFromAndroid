@@ -40,7 +40,7 @@ class VideoEncoder(
     private var height = 1080
     private var frameRate = 30
     private var bitRate = 8 * 1024 * 1024
-    private var mimeType: String = MIME_TYPE_AVC
+    private var mimeType: String = MIME_TYPE_HEVC
 
     fun configure(width: Int, height: Int, fps: Int, bitrate: Int, codec: String? = null) {
         this.width = width
@@ -62,6 +62,11 @@ class VideoEncoder(
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
             setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL)
+            try { setInteger(MediaFormat.KEY_LOW_LATENCY, 1) } catch (_: Throwable) {}
+            try { setInteger(MediaFormat.KEY_LATENCY, 0) } catch (_: Throwable) {}
+            try { setInteger(MediaFormat.KEY_PRIORITY, 0) } catch (_: Throwable) {}
+            try { setInteger(MediaFormat.KEY_COMPLEXITY, 0) } catch (_: Throwable) {}
+            try { setInteger(MediaFormat.KEY_OPERATING_RATE, frameRate) } catch (_: Throwable) {}
             if (mimeType == MIME_TYPE_AVC) {
                 // H.264 profiles
                 try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileHigh) } catch (_: Throwable) {
@@ -151,12 +156,12 @@ class VideoEncoder(
                 lastOutputFormat = format
                 muxerSink?.onFormatChanged(format)
             } else if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
-                // No output available yet, wait before trying again
-                Thread.sleep(10)
+                // No output available yet; yield briefly without adding much latency.
+                Thread.sleep(1)
             } else {
                 Log.w(TAG, "⚠️ Unexpected dequeue result: $outIndex")
-                // Negative value we don't handle, wait a bit
-                Thread.sleep(5)
+                // Negative value we don't handle; short sleep to keep latency low.
+                Thread.sleep(1)
             }
             } catch (e: Exception) {
                 Log.w(TAG, "Error in drainEncoder: ${e.message}")
