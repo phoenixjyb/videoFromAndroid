@@ -76,7 +76,7 @@ class Camera2Controller(
 
     suspend fun startCaptureSession(previewSurface: Surface, encoderSurface: Surface?, fps: Int = 30, highSpeed: Boolean = false) {
         val device = cameraDevice ?: throw IllegalStateException("Camera not open")
-        Log.d(TAG, "Starting capture session.")
+        Log.d(TAG, "Starting capture session. encoderSurface: ${if (encoderSurface != null) "PROVIDED" else "NULL"}")
 
         captureSession = suspendCancellableCoroutine { continuation ->
             val stateCallback = object : CameraCaptureSession.StateCallback() {
@@ -91,7 +91,10 @@ class Camera2Controller(
                 }
             }
             val surfaces = mutableListOf(previewSurface)
-            encoderSurface?.let { surfaces.add(it) }
+            encoderSurface?.let { 
+                surfaces.add(it)
+                Log.d(TAG, "✅ Encoder surface added to capture session")
+            } ?: Log.w(TAG, "⚠️ No encoder surface - video encoding will NOT work!")
             
             if (highSpeed) {
                 device.createConstrainedHighSpeedCaptureSession(surfaces, stateCallback, backgroundHandler)
@@ -110,7 +113,10 @@ class Camera2Controller(
         try {
             repeatingRequestBuilder = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
                 addTarget(previewSurface)
-                encoderSurface?.let { addTarget(it) }
+                encoderSurface?.let { 
+                    addTarget(it)
+                    Log.d(TAG, "✅ Encoder surface added as capture target")
+                } ?: Log.w(TAG, "⚠️ No encoder surface in capture request!")
                 set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
                 set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
                 set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO)

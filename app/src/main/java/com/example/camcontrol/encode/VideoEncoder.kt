@@ -68,18 +68,28 @@ class VideoEncoder(
                     try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain) } catch (_: Throwable) {}
                 }
                 try { setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel4) } catch (_: Throwable) {}
+                // CBR for H.264 stability
+                try { setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR) } catch (_: Throwable) {}
             } else {
-                // H.265 profiles
+                // H.265 profiles - aim for better quality
                 try { setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain) } catch (_: Throwable) {}
-                try { setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel4) } catch (_: Throwable) {}
+                // Use higher level for better quality ceiling
+                try { setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel51) } catch (_: Throwable) {
+                    try { setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel5) } catch (_: Throwable) {}
+                }
+                // VBR allows better quality distribution (more bits to complex scenes)
+                try { setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR) } catch (_: Throwable) {
+                    // Fallback to CQ (constant quality) if VBR not supported
+                    try { setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CQ) } catch (_: Throwable) {}
+                }
             }
-            try { setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR) } catch (_: Throwable) {}
             // Prepend SPS/PPS to IDR (framework key where supported)
             try { setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1) } catch (_: Throwable) {}
         }
 
-        // Cancel any existing drain job to prevent concurrent access
+        // Cancel and WAIT for any existing drain job to prevent concurrent access
         drainJob?.cancel()
+        drainJob = null
         
         mediaCodec = MediaCodec.createEncoderByType(mimeType).apply {
             configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
@@ -99,11 +109,13 @@ class VideoEncoder(
                 // Use shorter timeout to avoid blocking, but add delay between calls
                 val outIndex = codec.dequeueOutputBuffer(bufferInfo, 1000)
             if (outIndex >= 0) {
+                Log.d(TAG, "🔵 Dequeued output buffer: index=$outIndex, size=${bufferInfo.size}, flags=${bufferInfo.flags}")
                 val outputBuffer = codec.getOutputBuffer(outIndex)
                 if (outputBuffer != null && bufferInfo.size > 0) {
                     outputBuffer.position(bufferInfo.offset)
                     outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
                     val isCodecConfig = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0
+                    Log.d(TAG, "🔵 Processing buffer: codecConfig=$isCodecConfig")
                     if (!isCodecConfig) {
                         val sample = ByteArray(bufferInfo.size)
                         outputBuffer.get(sample)
@@ -113,6 +125,7 @@ class VideoEncoder(
                             val csd = codecConfigAnnexB
                             if (csd != null && csd.isNotEmpty()) csd + annexBFrame else annexBFrame
                         } else annexBFrame
+                        Log.d(TAG, "🟢 Calling onEncodedAnnexB: size=${prefixed.size}, keyFrame=$isKeyFrame")
                         onEncodedAnnexB(prefixed)
 
                         // Also feed raw sample to muxer sink for MP4
@@ -141,6 +154,7 @@ class VideoEncoder(
                 // No output available yet, wait before trying again
                 Thread.sleep(10)
             } else {
+                Log.w(TAG, "⚠️ Unexpected dequeue result: $outIndex")
                 // Negative value we don't handle, wait a bit
                 Thread.sleep(5)
             }
@@ -172,6 +186,22 @@ class VideoEncoder(
             Log.d(TAG, "Requested keyframe")
         } catch (t: Throwable) {
             Log.w(TAG, "requestKeyFrame failed", t)
+        }
+    }
+
+    fun setBitrate(newBitrate: Int) {
+        try {
+            val codec = mediaCodec ?: run {
+                Log.w(TAG, "Cannot set bitrate: encoder not started")
+                return
+            }
+            this.bitRate = newBitrate
+            val b = android.os.Bundle()
+            b.putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, newBitrate)
+            codec.setParameters(b)
+            Log.d(TAG, "Dynamic bitrate update: ${newBitrate / 1_000_000} Mbps")
+        } catch (t: Throwable) {
+            Log.w(TAG, "setBitrate failed: ${t.message}")
         }
     }
 

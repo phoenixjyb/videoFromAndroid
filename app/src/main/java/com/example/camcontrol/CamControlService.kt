@@ -21,6 +21,8 @@ import com.example.camcontrol.encode.VideoEncoder
 import com.example.camcontrol.encode.VideoRecorder
 import com.example.camcontrol.transport.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -52,6 +54,8 @@ class CamControlService : Service() {
     private var currentProfile = VideoProfile(1920, 1080, 30, highSpeed = false)
     private val defaultProfile = VideoProfile(1920, 1080, 30, highSpeed = false)
     @Volatile private var currentBitrate: Int? = null
+    @Volatile private var currentCodec: String = "h264"  // Track current codec for quality optimization
+    private val encoderMutex = Mutex()  // Prevent concurrent encoder reconfigurations
 
     private val telemetryReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -233,16 +237,18 @@ class CamControlService : Service() {
                         sendBroadcast(intent)
                         // Optionally reconfigure encoder to match; rebroadcast surface
                         serviceScope.launch(Dispatchers.IO) {
-                            try {
-                                currentProfile = VideoProfile(command.width, command.height, command.fps, command.highSpeed)
-                                val req = currentBitrate ?: estimateBitrate(currentProfile)
-                                val br = capBitrateForProfile(currentProfile, req)
-                                videoEncoder.stop()
-                                videoEncoder.configure(currentProfile.width, currentProfile.height, currentProfile.fps, br, currentCodec)
-                                videoEncoder.start()
-                                broadcastEncoderSurface()
-                            } catch (t: Throwable) {
-                                Log.w(TAG, "Encoder reconfigure failed", t)
+                            encoderMutex.withLock {
+                                try {
+                                    currentProfile = VideoProfile(command.width, command.height, command.fps, command.highSpeed)
+                                    val req = currentBitrate ?: estimateBitrate(currentProfile)
+                                    val br = capBitrateForProfile(currentProfile, req)
+                                    videoEncoder.stop()
+                                    videoEncoder.configure(currentProfile.width, currentProfile.height, currentProfile.fps, br, currentCodec)
+                                    videoEncoder.start()
+                                    broadcastEncoderSurface()
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "Encoder reconfigure failed", t)
+                                }
                             }
                         }
                     }
@@ -255,15 +261,25 @@ class CamControlService : Service() {
                             return@ControlServer
                         }
                         currentBitrate = applied
+                        // Use dynamic bitrate update (no encoder restart needed)
                         serviceScope.launch(Dispatchers.IO) {
-                            try {
-                                val p = currentProfile
-                                videoEncoder.stop()
-                                videoEncoder.configure(p.width, p.height, p.fps, applied, currentCodec)
-                                videoEncoder.start()
-                                broadcastEncoderSurface()
-                            } catch (t: Throwable) {
-                                Log.w(TAG, "Bitrate reconfigure failed", t)
+                            encoderMutex.withLock {
+                                try {
+                                    videoEncoder.setBitrate(applied)
+                                    Log.d(TAG, "✅ Bitrate updated dynamically to ${applied / 1_000_000} Mbps")
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "Dynamic bitrate update failed, will try full reconfigure", t)
+                                    // Fallback: full reconfigure if dynamic update fails
+                                    try {
+                                        val p = currentProfile
+                                        videoEncoder.stop()
+                                        videoEncoder.configure(p.width, p.height, p.fps, applied, currentCodec)
+                                        videoEncoder.start()
+                                        broadcastEncoderSurface()
+                                    } catch (t2: Throwable) {
+                                        Log.e(TAG, "Bitrate reconfigure failed", t2)
+                                    }
+                                }
                             }
                         }
                     }
@@ -284,15 +300,17 @@ class CamControlService : Service() {
                         if (currentCodec == mapped) return@ControlServer
                         currentCodec = mapped
                         serviceScope.launch(Dispatchers.IO) {
-                            try {
-                                val p = currentProfile
-                                val br = currentBitrate ?: estimateBitrate(p)
-                                videoEncoder.stop()
-                                videoEncoder.configure(p.width, p.height, p.fps, br, currentCodec)
-                                videoEncoder.start()
-                                broadcastEncoderSurface()
-                            } catch (t: Throwable) {
-                                Log.w(TAG, "Codec reconfigure failed", t)
+                            encoderMutex.withLock {
+                                try {
+                                    val p = currentProfile
+                                    val br = currentBitrate ?: estimateBitrate(p)
+                                    videoEncoder.stop()
+                                    videoEncoder.configure(p.width, p.height, p.fps, br, currentCodec)
+                                    videoEncoder.start()
+                                    broadcastEncoderSurface()
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "Codec reconfigure failed", t)
+                                }
                             }
                         }
                     }
@@ -446,7 +464,15 @@ class CamControlService : Service() {
             p.width >= 1920 -> 0.12f        // 1080p30 ≈ 9.3 Mbps
             else -> 0.10f
         }
-        val bitrate = (p.width * p.height * p.fps * bpp).toInt()
+        var bitrate = (p.width * p.height * p.fps * bpp).toInt()
+        
+        // H.265 is ~40-50% more efficient than H.264, but we want same visual quality
+        // So we actually keep similar bitrate (slightly higher for headroom)
+        // This gives better quality than H.264 at same bitrate
+        if (currentCodec == "h265") {
+            bitrate = (bitrate * 1.1f).toInt()  // 10% boost for H.265 quality headroom
+        }
+        
         return bitrate.coerceIn(5_000_000, 50_000_000)
     }
 

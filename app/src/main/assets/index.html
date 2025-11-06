@@ -111,8 +111,8 @@
             <button class="btn" id="zoom-inc">+</button>
         </div>
         <label style="margin-left:20px;">Bitrate (Mbps):
-            <input type="range" id="bitrate-slider" min="3" max="50" step="1" value="9" style="vertical-align: middle;">
-            <span id="bitrate-value">9</span>
+            <input type="range" id="bitrate-slider" min="3" max="50" step="1" value="15" style="vertical-align: middle;">
+            <span id="bitrate-value">15</span>
         </label>
         <label style="margin-left:20px;">
             <input type="checkbox" id="ae-lock"> AE Lock
@@ -298,7 +298,12 @@
         }
 
         async function initWebCodecs() {
-            if (!('VideoDecoder' in window)) return false;
+            console.log('🔍 Checking WebCodecs support...');
+            if (!('VideoDecoder' in window)) {
+                console.warn('❌ VideoDecoder not available in window');
+                return false;
+            }
+            console.log('✅ VideoDecoder available, initializing...');
             try {
                 wcDecoder = new VideoDecoder({
                     output: async (frame) => {
@@ -322,27 +327,53 @@
                 wcTimestamp = 0;
                 decoderName = 'WebCodecs';
                 decLabel.textContent = decoderName;
+                console.log('✅ WebCodecs decoder initialized successfully');
                 return true;
             } catch (e) {
-                console.warn('WebCodecs init failed', e);
+                console.error('❌ WebCodecs init failed:', e);
                 resetWebCodecs();
                 return false;
             }
         }
 
         async function ensureDecoder() {
+            console.log('🎬 ensureDecoder() called');
             // Prefer WebCodecs if available
             const okWC = await initWebCodecs();
-            if (okWC) return;
-            // Fallback to Broadway
-            try { await loadScript('/assets/broadway/Broadway.js'); } catch {}
-            if (!(window.H264 && H264.Player)) {
-                try { await loadScript('https://mbebenita.github.io/Broadway/Player/Broadway.js'); } catch {}
+            if (okWC) {
+                console.log('✅ Using WebCodecs decoder');
+                return;
             }
-            if (window.H264 && H264.Player) {
-                try { player = new H264.Player(canvas); decoderName = 'Broadway'; decLabel.textContent = decoderName; } catch (e) { console.warn('Broadway init error', e); }
+            console.log('⚠️ WebCodecs not available, trying Broadway...');
+            // Fallback to Broadway - need to load all 3 files
+            try { 
+                await loadScript('/assets/broadway/YUVCanvas.js');
+                await loadScript('/assets/broadway/Decoder.js'); 
+                await loadScript('/assets/broadway/Broadway.js');
+            } catch (e) {
+                console.warn('Local Broadway files not found:', e);
+            }
+            
+            // Check if Player is available (not H264.Player - that was old API)
+            if (window.Player) {
+                try { 
+                    player = new Player({
+                        useWorker: true,
+                        workerFile: '/assets/broadway/Decoder.js',
+                        webgl: 'auto',
+                        size: { width: canvas.width, height: canvas.height }
+                    });
+                    player.canvas = canvas;
+                    decoderName = 'Broadway'; 
+                    decLabel.textContent = decoderName;
+                    console.log('✅ Using Broadway decoder');
+                } catch (e) { 
+                    console.error('❌ Broadway init error:', e); 
+                    decoderName = 'None';
+                    decLabel.textContent = decoderName;
+                }
             } else {
-                console.warn('Broadway/WebCodecs not available; video decode disabled');
+                console.error('❌ Broadway/WebCodecs not available; video decode disabled');
                 decoderName = 'None';
                 decLabel.textContent = decoderName;
             }
@@ -560,9 +591,16 @@
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
             const codec = codecSelect.value;
             if (codec === 'h265') {
-                // Warn: many browsers do not decode HEVC via WebCodecs.
-                console.warn('HEVC selected: Web preview may not decode in this browser. Orin ingest/RTSP recommended.');
-                decLabel.textContent = 'HEVC (preview may fail)';
+                // Most browsers don't support HEVC/H.265 decoding
+                alert('⚠️ H.265/HEVC selected\n\nWeb browsers (Edge, Chrome, Firefox) do NOT support H.265 video decoding.\n\nVideo preview will freeze/fail in browser.\n\nH.265 is intended for:\n• RTSP streaming to VLC/FFmpeg\n• Recording to file\n• Jetson Orin ingestion\n\nUse H.264 for web preview.');
+                statusDiv.textContent = 'H.265 active - Browser preview disabled (use RTSP/recording)';
+                console.warn('HEVC selected: Web preview disabled. Use RTSP or recording for H.265 output.');
+                decLabel.textContent = 'HEVC (no browser support)';
+            } else {
+                decLabel.textContent = decoderName || 'Decoder';
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    statusDiv.textContent = `Connected to ${WS_HOST}`;
+                }
             }
             ws.send(JSON.stringify({ cmd: 'setCodec', codec }));
         });

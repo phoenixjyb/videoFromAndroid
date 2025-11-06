@@ -134,7 +134,11 @@ class ControlServer(
     }
 
     suspend fun broadcastVideoData(data: ByteArray) {
-        if (connections.isEmpty()) return
+        if (connections.isEmpty()) {
+            Log.v(TAG, "⚠️ No WebSocket connections to broadcast video data (${data.size} bytes)")
+            return
+        }
+        Log.d(TAG, "📤 Broadcasting video data: ${data.size} bytes to ${connections.size} connection(s)")
         val frame = Frame.Binary(true, data)
         val snapshot = synchronized(connections) { connections.toList() }
         snapshot.forEach { session ->

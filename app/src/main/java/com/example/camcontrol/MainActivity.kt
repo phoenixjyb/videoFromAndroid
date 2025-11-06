@@ -135,8 +135,13 @@ class MainActivity : AppCompatActivity() {
                 // If preview is active, restart session to include encoder
                 activityScope.launch {
                     try {
-                        if (binding.previewView.holder.surface.isValid) {
+                        val isValid = binding.previewView.holder.surface.isValid
+                        Log.d("MainActivity", "Preview surface valid: $isValid, will restart: $isValid")
+                        if (isValid) {
+                            Log.i("MainActivity", "🔄 Restarting pipeline to include encoder surface...")
                             restartPipeline(currentProfile)
+                        } else {
+                            Log.w("MainActivity", "⚠️ Preview surface not valid yet - encoder will be added when camera starts")
                         }
                     } catch (e: Exception) {
                         Log.e("MainActivity", "Error restarting pipeline with encoder surface", e)
@@ -297,7 +302,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Video encoding is now handled by CamControlService
-            Log.i("MainActivity", "📷 Opening camera for preview/encode...")
+            Log.i("MainActivity", "📷 Opening camera for preview/encode... encoderSurface=${if (encoderSurface != null) "AVAILABLE" else "NULL"}")
             cameraController.openCamera()
             Log.i("MainActivity", "🎥 Starting capture session for preview...")
             cameraController.startCaptureSession(surface, encoderSurface, profile.fps, profile.highSpeed)

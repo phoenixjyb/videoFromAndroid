@@ -1,0 +1,144 @@
+# WiFi Wireless Access Guide
+
+## Prerequisites
+- Both phone and computer must be on the **same WiFi network**
+- WebSocket server running on phone (app started)
+- Port 9090 accessible (no firewall blocking)
+
+## Step 1: Find Your Phone's IP Address
+
+### Method A: Using ADB
+```bash
+adb shell ip addr show wlan0 | grep 'inet ' | awk '{print $2}' | cut -d/ -f1
+```
+
+### Method B: On Android Phone
+1. Open **Settings** → **About phone** → **Status**
+2. Look for **IP address** (e.g., `192.168.1.100`)
+
+**OR**
+
+1. Open **Settings** → **Network & Internet** → **Wi-Fi**
+2. Tap on your connected network
+3. Find **IP address**
+
+### Method C: Quick Command
+```bash
+# Get phone IP automatically
+adb shell "ip -o -4 addr show wlan0 | awk '{print \$4}' | cut -d/ -f1"
+```
+
+## Step 2: Access WebUI Wirelessly
+
+Once you have the phone's IP (e.g., `192.168.1.100`):
+
+### In Web Browser
+```
+http://192.168.1.100:9090
+```
+
+### Update Host in WebUI
+1. Open `http://192.168.1.100:9090`
+2. In the top bar, the **Host** field shows the current IP
+3. WebUI automatically detects and uses the correct IP
+
+## Step 3: Test Connection
+
+```bash
+# From your computer, test if port 9090 is reachable
+curl http://192.168.1.100:9090/
+
+# Or test WebSocket connectivity
+wscat -c ws://192.168.1.100:9090/control
+```
+
+## Troubleshooting
+
+### Cannot Connect
+1. **Verify same WiFi**: Both devices on same network?
+   ```bash
+   # Check phone WiFi
+   adb shell dumpsys wifi | grep "mNetworkInfo"
+   ```
+
+2. **Check phone IP**:
+   ```bash
+   adb shell ip addr show wlan0
+   ```
+
+3. **Test port accessibility**:
+   ```bash
+   # From computer
+   nc -zv 192.168.1.100 9090
+   ```
+
+4. **Firewall**: Android may block incoming connections
+   - Some phones have built-in firewall
+   - Check phone's security settings
+
+### VPN Interference
+If you have VPN running:
+
+**On Computer:**
+```bash
+# Temporarily disable VPN or add exception for local network
+# For macOS/Linux, you can bypass proxy:
+export NO_PROXY="192.168.0.0/16,127.0.0.1,localhost"
+
+# Or disable VPN entirely for testing
+```
+
+**On Phone:**
+- Disable VPN in phone settings during testing
+- VPN can block local network access
+
+### Port Forwarding Note
+**Do NOT use ADB port forwarding for WiFi access**
+```bash
+# This is only for USB connection:
+# adb forward tcp:9090 tcp:9090  ← NOT needed for WiFi
+
+# For WiFi, access phone IP directly
+```
+
+## Quick Reference
+
+| Connection Type | URL | ADB Forward Needed? |
+|----------------|-----|---------------------|
+| USB (ADB) | `http://localhost:9090` | ✅ Yes |
+| WiFi | `http://PHONE_IP:9090` | ❌ No |
+
+## Example Session
+
+```bash
+# 1. Get phone IP
+PHONE_IP=$(adb shell "ip -o -4 addr show wlan0 | awk '{print \$4}' | cut -d/ -f1")
+echo "Phone IP: $PHONE_IP"
+
+# 2. Test connectivity
+curl http://$PHONE_IP:9090/
+
+# 3. Open in browser
+open http://$PHONE_IP:9090  # macOS
+# or
+xdg-open http://$PHONE_IP:9090  # Linux
+# or manually open in browser on Windows
+```
+
+## Network Requirements
+
+- **WiFi**: 2.4GHz or 5GHz (5GHz recommended for better bandwidth)
+- **Bandwidth**: 
+  - H.264 1080p30: ~10-15 Mbps
+  - H.265 1080p30: ~10-15 Mbps (better quality)
+  - H.264 4K30: ~30-50 Mbps
+- **Latency**: < 50ms on local network (typical: 1-5ms)
+
+## Security Note
+
+The WebSocket server has **NO authentication**. Only use on trusted WiFi networks.
+
+For production use, consider adding:
+- Authentication tokens
+- HTTPS/WSS (TLS encryption)
+- Network ACL (IP whitelisting)
