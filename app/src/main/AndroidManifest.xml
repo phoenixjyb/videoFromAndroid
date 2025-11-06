@@ -12,7 +12,7 @@
 
     <application
         android:label="camControl"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">
 
