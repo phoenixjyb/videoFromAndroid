@@ -64,12 +64,19 @@ PROJECT_STATUS_SUMMARY.md    # Snapshot of current status
 - Start app; set up port forwarding: `adb forward tcp:9090 tcp:9090`
 
 ### Mac Web Preview
-- Open `http://localhost:9090` in Edge/Chrome.
+- Open `http://localhost:9090` in a compatible browser (see Browser Compatibility below).
 - If blank initially, refresh once (wait for SPS/PPS keyframe).
+- **Browser Compatibility**:
+  - ✅ **Safari 16.4+** (macOS 13.3+) — WebCodecs H.264 decode (recommended)
+  - ✅ **Chrome 94+** — WebCodecs H.264 decode
+  - ⚠️ **Edge** — WebCodecs may not be available; Broadway.js fallback used but may have issues
+  - 🔧 **Firefox** — WebCodecs not supported; Broadway.js fallback used
 - Troubleshooting:
   - Ensure app in foreground; `adb forward` active.
   - Proxy off/bypassed for localhost.
   - Check logs: `scripts/log.sh --both --forward`
+  - Check browser console (F12) for decoder status: should show "WebCodecs" or "Broadway"
+  - If decoder shows "None", try Safari or Chrome instead
 
 ### Save a local capture (Mac)
 - `source .venv/bin/activate && python scripts/ws_save_h264.py --seconds 10 --out capture.h264`
