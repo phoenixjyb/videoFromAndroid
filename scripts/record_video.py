@@ -56,18 +56,27 @@ class VideoRecorder:
         """Configure video encoder settings"""
         print(f"\n{YELLOW}⚙️  Configuring encoder...{RESET}")
         
-        # Set codec
-        await self.send_command("setCodec", value=codec)
+        # Set codec (field name: "codec")
+        await self.send_command("setCodec", codec=codec)
         await asyncio.sleep(0.5)
         
-        # Set video profile (resolution + fps)
+        # Set video profile (fields: width, height, fps)
         if profile:
-            await self.send_command("setVideoProfile", profile=profile)
-            await asyncio.sleep(0.5)
+            # Parse profile: "1920x1080@30" -> width=1920, height=1080, fps=30
+            try:
+                resolution, fps_str = profile.split('@')
+                width, height = map(int, resolution.split('x'))
+                fps_val = int(fps_str)
+                await self.send_command("setVideoProfile", width=width, height=height, fps=fps_val)
+                await asyncio.sleep(0.5)
+            except ValueError:
+                print(f"{RED}❌ Invalid profile format: {profile}{RESET}")
+                print(f"{YELLOW}Expected format: WIDTHxHEIGHT@FPS (e.g., 1920x1080@30){RESET}")
+                raise
         
-        # Set bitrate
+        # Set bitrate (field name: "bitrate")
         if bitrate:
-            await self.send_command("setBitrate", value=bitrate)
+            await self.send_command("setBitrate", bitrate=bitrate)
             await asyncio.sleep(0.5)
             
         print(f"{GREEN}✅ Encoder configured: {codec.upper()}, {profile}, {bitrate} bps{RESET}")
