@@ -52,9 +52,15 @@ class VideoRecorder:
         await self.ws.send(json.dumps(msg))
         print(f"{CYAN}📤 Sent: {msg}{RESET}")
         
-    async def configure_encoder(self, codec, bitrate, profile, fps):
+    async def configure_encoder(self, codec, bitrate, profile, fps, zoom):
         """Configure video encoder settings"""
         print(f"\n{YELLOW}⚙️  Configuring encoder...{RESET}")
+        
+        # Set zoom first (before encoder restart)
+        if zoom:
+            await self.send_command("setZoomRatio", value=zoom)
+            await asyncio.sleep(0.3)
+            print(f"{CYAN}🔍 Zoom set to {zoom}x{RESET}")
         
         # Set codec (field name: "codec")
         await self.send_command("setCodec", codec=codec)
@@ -79,7 +85,7 @@ class VideoRecorder:
             await self.send_command("setBitrate", bitrate=bitrate)
             await asyncio.sleep(0.5)
             
-        print(f"{GREEN}✅ Encoder configured: {codec.upper()}, {profile}, {bitrate} bps{RESET}")
+        print(f"{GREEN}✅ Encoder configured: {codec.upper()}, {profile}, {bitrate} bps{', Zoom: ' + str(zoom) + 'x' if zoom else ''}{RESET}")
         
     def generate_filename(self, codec, bitrate, profile, duration):
         """Generate timestamped filename with recording parameters"""
@@ -92,20 +98,17 @@ class VideoRecorder:
         filename = f"{timestamp}_{codec}_{profile_clean}_{bitrate_mb}_{duration}s.{ext}"
         return self.output_dir / filename
         
-    async def record(self, duration, codec, bitrate, profile, fps):
-        """Record video stream for specified duration"""
-        output_file = self.generate_filename(codec, bitrate, profile, duration)
+    async def record(self, codec, bitrate, profile, fps, duration, zoom):
+        """Start recording video frames"""
+        # Generate filename
+        filename = self.generate_filename(codec, bitrate, profile, duration)
         
-        print(f"\n{BLUE}🎥 Recording to: {output_file.name}{RESET}")
-        print(f"{YELLOW}⏱️  Duration: {duration}s{RESET}")
-        print(f"{CYAN}📊 Codec: {codec.upper()}, Bitrate: {bitrate} bps, Profile: {profile}{RESET}\n")
+        print(f"{YELLOW}🎥 Recording to: {filename.name}{RESET}")
         
-        self.file_handle = open(output_file, 'wb')
+        # Open file for writing
+        self.file_handle = open(filename, 'wb')
         self.recording = True
         self.start_time = datetime.now()
-        self.frame_count = 0
-        self.byte_count = 0
-        self.got_sps_pps = False
         
         # Start receiving frames
         end_time = datetime.now().timestamp() + duration
@@ -165,10 +168,10 @@ class VideoRecorder:
         print(f"   Size: {mbytes:.2f} MB")
         print(f"   Duration: {elapsed:.2f}s")
         print(f"   Avg FPS: {fps_actual:.1f}")
-        print(f"   File: {output_file}{RESET}\n")
+        print(f"   File: {filename}{RESET}\n")
         
         # Convert to MP4 if possible
-        await self.convert_to_mp4(output_file, codec)
+        await self.convert_to_mp4(filename, codec)
         
     async def convert_to_mp4(self, raw_file, codec):
         """Convert raw H.264/H.265 to MP4 container using ffmpeg"""
@@ -215,14 +218,14 @@ async def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Record 30s H.264 video at 8 Mbps, 1920x1080@30fps
-  python scripts/record_video.py -d 30 -c h264 -b 8000000 -p 1920x1080@30
+  # Record 30s H.265 video at 15 Mbps, 1920x1080@30fps (default quality)
+  python scripts/record_video.py -d 30 -p 1920x1080@30
   
-  # Record 60s H.265 video at 12 Mbps, 3840x2160@30fps  
-  python scripts/record_video.py -d 60 -c h265 -b 12000000 -p 3840x2160@30
+  # Record 60s H.265 video at 20 Mbps, 4K@30fps with 2x zoom
+  python scripts/record_video.py -d 60 -b 20000000 -p 3840x2160@30 -z 2.0
   
-  # Record with default settings
-  python scripts/record_video.py -d 10
+  # Record 10s H.264 video at 12 Mbps, 1080p@60fps
+  python scripts/record_video.py -d 10 -c h264 -b 12000000 -p 1920x1080@60
 
 Video profiles available:
   1920x1080@60, 1920x1080@30, 3840x2160@30, 1280x720@60, etc.
@@ -239,14 +242,16 @@ Output:
                         help='WebSocket port (default: 9090)')
     parser.add_argument('-d', '--duration', type=int, required=True,
                         help='Recording duration in seconds')
-    parser.add_argument('-c', '--codec', choices=['h264', 'h265'], default='h264',
-                        help='Video codec (default: h264)')
+    parser.add_argument('-c', '--codec', choices=['h264', 'h265'], default='h265',
+                        help='Video codec (default: h265)')
     parser.add_argument('-b', '--bitrate', type=int,
-                        help='Bitrate in bps (e.g., 8000000 for 8 Mbps)')
+                        help='Bitrate in bps (default: 15000000 for 15 Mbps)')
     parser.add_argument('-p', '--profile', 
                         help='Video profile: WIDTHxHEIGHT@FPS (e.g., 1920x1080@30)')
     parser.add_argument('-f', '--fps', type=int,
                         help='Frame rate (if not specified in profile)')
+    parser.add_argument('-z', '--zoom', type=float,
+                        help='Zoom ratio (e.g., 1.0, 2.0, 3.0)')
     parser.add_argument('-o', '--output', default='saved_videos',
                         help='Output directory (default: saved_videos)')
     
@@ -263,11 +268,11 @@ Output:
             if '3840x2160' in args.profile or '4K' in args.profile:
                 args.bitrate = 20000000  # 20 Mbps for 4K
             elif '1920x1080' in args.profile or 'FHD' in args.profile:
-                args.bitrate = 8000000   # 8 Mbps for 1080p
+                args.bitrate = 15000000   # 15 Mbps for 1080p
             else:
-                args.bitrate = 4000000   # 4 Mbps for 720p
+                args.bitrate = 8000000   # 8 Mbps for 720p
         else:
-            args.bitrate = 8000000  # Default 8 Mbps
+            args.bitrate = 15000000  # Default 15 Mbps
     
     recorder = VideoRecorder(args.host, args.port, args.output)
     
@@ -285,17 +290,20 @@ Output:
             args.codec, 
             args.bitrate, 
             args.profile,
-            args.fps
+            args.fps,
+            args.zoom
         )
-        # Wait for encoder to restart
-        await asyncio.sleep(2)
+        # Wait for encoder to restart and stabilize
+        print(f"{YELLOW}⏳ Waiting for encoder to stabilize...{RESET}")
+        await asyncio.sleep(2.5)
         
         await recorder.record(
-            args.duration,
             args.codec,
             args.bitrate, 
             args.profile,
-            args.fps
+            args.fps,
+            args.duration,
+            args.zoom
         )
         
     except websockets.exceptions.WebSocketException as e:
