@@ -82,6 +82,40 @@ PROJECT_STATUS_SUMMARY.md    # Snapshot of current status
 - `source .venv/bin/activate && python scripts/ws_save_h264.py --seconds 10 --out capture.h264`
 - Remux to MP4: `ffmpeg -y -f h264 -i capture.h264 -c copy capture.mp4`
 
+### Record video with custom quality settings (Mac)
+Record video directly from Android with configurable codec, bitrate, resolution:
+
+```bash
+# Quick 10-second recording with defaults (H.264, 1080p@30, 8 Mbps)
+./scripts/record.sh -d 10
+
+# Record 30s H.264 video at 8 Mbps, 1920x1080@30fps
+./scripts/record.sh -d 30 -c h264 -b 8000000 -p 1920x1080@30
+
+# Record 60s H.265 video at 12 Mbps, 4K@30fps
+./scripts/record.sh -d 60 -c h265 -b 12000000 -p 3840x2160@30
+
+# Record 720p@60fps at 6 Mbps
+./scripts/record.sh -d 20 -c h264 -b 6000000 -p 1280x720@60
+```
+
+Features:
+- Auto-generates timestamped filenames: `YYYYMMDD_HHMMSS_codec_resolution_bitrate_duration.{h264|h265|mp4}`
+- Saves to `saved_videos/` directory
+- Auto-converts to MP4 if ffmpeg is installed
+- Real-time progress updates and statistics
+- Configures encoder before recording (codec, bitrate, profile)
+
+Parameters:
+- `-d, --duration` — Recording duration in seconds (required)
+- `-c, --codec` — h264 or h265 (default: h264)
+- `-b, --bitrate` — Bitrate in bps (auto-selected by resolution if not specified)
+- `-p, --profile` — WIDTHxHEIGHT@FPS (e.g., 1920x1080@30, 3840x2160@30)
+- `-H, --host` — Android IP address (default: 172.16.31.5)
+- `-o, --output` — Output directory (default: saved_videos)
+
+Note: Make sure the Android app is running before recording.
+
 ### Orin — Display/Decode
 - Install deps (Jetson): `python3-gi`, `gir1.2-gstreamer-1.0`, GStreamer plugins, `nvidia-l4t-gstreamer`, `websockets`.
 - Run: `python3 orin/ws_h264_gst.py --host <android-ip> --codec h265` (default codec is now HEVC; add `--codec h264` if you revert the phone encoder)
