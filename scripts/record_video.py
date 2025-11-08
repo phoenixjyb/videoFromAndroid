@@ -1,11 +1,27 @@
 #!/usr/bin/env python3
 """
-Record video from Android camera with customizable quality settings.
-Saves H.264/H.265 stream to local Mac with timestamped filename.
+Record video using WebSocket streaming (⚠️ HAS TIMESTAMP COMPRESSION ISSUE).
+
+This script captures H.264/H.265 video frames from WebSocket and saves them locally.
+However, it suffers from timestamp compression: a 5-second recording may produce
+a ~1-2 second video due to PTS issues in the streaming path.
+
+⚠️ NOT RECOMMENDED for production use. Use record_on_device.py instead for accurate recordings.
+
+This script is kept for debugging and comparison purposes.
 
 Usage:
     python scripts/record_video.py --duration 30 --codec h264 --bitrate 8000000
     python scripts/record_video.py -d 60 -c h265 -b 12000000 --profile 1920x1080@30
+
+Known Issue:
+    - Timestamps are compressed (5s → ~1.3s video)
+    - Use record_on_device.py for accurate duration/timestamps
+
+See also:
+    - record_on_device.py: Recommended method using MediaMuxer (accurate timestamps)
+    - archive/record_on_device_simple.py: Minimal MediaMuxer recorder
+    - scripts/README.md: Detailed comparison and troubleshooting
 """
 
 import asyncio
@@ -109,9 +125,9 @@ class VideoRecorder:
         self.file_handle = open(filename, 'wb')
         self.recording = True
         self.start_time = datetime.now()
+        end_time = self.start_time.timestamp() + duration
         
-        # Start receiving frames
-        end_time = datetime.now().timestamp() + duration
+        print(f"{GREEN}✅ Starting {duration}s recording{RESET}")
         
         try:
             while datetime.now().timestamp() < end_time:
@@ -121,33 +137,19 @@ class VideoRecorder:
                     # Text message (telemetry/status)
                     continue
                     
-                # Binary video frame
-                if not self.got_sps_pps:
-                    # Check for SPS (0x67) and PPS (0x68) or HEVC VPS/SPS/PPS
-                    if codec.lower() == "h264":
-                        # Look for SPS (0x00 0x00 0x00 0x01 0x67)
-                        if b'\x00\x00\x00\x01\x67' in msg[:50]:
-                            self.got_sps_pps = True
-                            print(f"{GREEN}✅ Got SPS/PPS (H.264 config){RESET}")
-                    else:  # h265
-                        # Look for VPS (0x00 0x00 0x00 0x01 0x40)
-                        if b'\x00\x00\x00\x01\x40' in msg[:50]:
-                            self.got_sps_pps = True
-                            print(f"{GREEN}✅ Got VPS/SPS/PPS (H.265 config){RESET}")
+                # Binary video frame - write it
+                self.file_handle.write(msg)
+                self.frame_count += 1
+                self.byte_count += len(msg)
                 
-                if self.got_sps_pps:
-                    self.file_handle.write(msg)
-                    self.frame_count += 1
-                    self.byte_count += len(msg)
-                    
-                    # Progress update every 2 seconds
-                    if self.frame_count % 60 == 0:
-                        elapsed = (datetime.now() - self.start_time).total_seconds()
-                        remaining = duration - elapsed
-                        mbytes = self.byte_count / (1024 * 1024)
-                        fps_actual = self.frame_count / elapsed if elapsed > 0 else 0
-                        print(f"{CYAN}📹 {self.frame_count} frames, {mbytes:.1f} MB, "
-                              f"{fps_actual:.1f} fps, {remaining:.1f}s remaining{RESET}")
+                # Progress update every 2 seconds
+                if self.frame_count % 60 == 0:
+                    elapsed = (datetime.now() - self.start_time).total_seconds()
+                    remaining = duration - elapsed
+                    mbytes = self.byte_count / (1024 * 1024)
+                    fps_actual = self.frame_count / elapsed if elapsed > 0 else 0
+                    print(f"{CYAN}📹 {self.frame_count} frames, {mbytes:.1f} MB, "
+                          f"{fps_actual:.1f} fps, {remaining:.1f}s remaining{RESET}")
                         
         except asyncio.TimeoutError:
             pass
@@ -252,6 +254,8 @@ Output:
                         help='Frame rate (if not specified in profile)')
     parser.add_argument('-z', '--zoom', type=float,
                         help='Zoom ratio (e.g., 1.0, 2.0, 3.0)')
+    parser.add_argument('--no-config', action='store_true',
+                        help='Skip encoder reconfiguration (use current settings, avoids timestamp issues)')
     parser.add_argument('-o', '--output', default='saved_videos',
                         help='Output directory (default: saved_videos)')
     
@@ -286,17 +290,27 @@ Output:
     
     try:
         await recorder.connect()
-        await recorder.configure_encoder(
-            args.codec, 
-            args.bitrate, 
-            args.profile,
-            args.fps,
-            args.zoom
-        )
-        # Wait for encoder to restart and stabilize
-        print(f"{YELLOW}⏳ Waiting for encoder to stabilize...{RESET}")
-        await asyncio.sleep(2.5)
         
+        # Only configure if not skipped
+        if not args.no_config:
+            await recorder.configure_encoder(
+                args.codec, 
+                args.bitrate, 
+                args.profile,
+                args.fps,
+                args.zoom
+            )
+            # Wait for encoder to stabilize after configuration
+            print(f"{YELLOW}⏳ Waiting for encoder to stabilize (5 seconds)...{RESET}")
+            await asyncio.sleep(5.0)
+        else:
+            print(f"{YELLOW}⚠️  Skipping encoder reconfiguration (using current settings){RESET}")
+            # Still set zoom if specified
+            if args.zoom:
+                await recorder.send_command("setZoomRatio", value=args.zoom)
+                print(f"{CYAN}🔍 Zoom set to {args.zoom}x{RESET}")
+        
+        # Start recording
         await recorder.record(
             args.codec,
             args.bitrate, 

@@ -30,7 +30,7 @@ app/（Android 应用）
   assets/index.html        # Web UI（WebCodecs 解码 + 控件）
 
 scripts/
-  ws_probe.py / ws_save_h264.py / ws_record.py  # 调试与抓流
+  ws_probe.py / ws_save_h264.py / record_on_device.py  # 调试与抓流
   log.sh / webui.sh                             # 开发辅助（端口 9090）
 
 orin/

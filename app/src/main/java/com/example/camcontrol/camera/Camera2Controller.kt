@@ -111,7 +111,11 @@ class Camera2Controller(
         val device = cameraDevice ?: throw IllegalStateException("Camera not open")
 
         try {
-            repeatingRequestBuilder = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+            // Use TEMPLATE_RECORD when encoder surface is present for proper video timestamps
+            val template = if (encoderSurface != null) CameraDevice.TEMPLATE_RECORD else CameraDevice.TEMPLATE_PREVIEW
+            Log.d(TAG, "Creating capture request with template: ${if (encoderSurface != null) "RECORD" else "PREVIEW"}")
+            
+            repeatingRequestBuilder = device.createCaptureRequest(template).apply {
                 addTarget(previewSurface)
                 encoderSurface?.let { 
                     addTarget(it)

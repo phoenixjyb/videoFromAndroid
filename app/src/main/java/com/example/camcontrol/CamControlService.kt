@@ -225,6 +225,18 @@ class CamControlService : Service() {
                     is StartRecording-> serviceScope.launch { startRecording(command.name) }
                     is StopRecording -> serviceScope.launch { stopRecording() }
                     is SetVideoProfile -> {
+                        // Check if profile actually changed AND encoder is running
+                        if (videoEncoder.isRunning &&
+                            currentProfile.width == command.width && 
+                            currentProfile.height == command.height &&
+                            currentProfile.fps == command.fps &&
+                            currentProfile.highSpeed == command.highSpeed) {
+                            Log.d(TAG, "🎚️ Video profile unchanged, skipping restart")
+                            return@ControlServer
+                        }
+                        
+                        Log.d(TAG, "🎚️ Video profile change: ${command.width}x${command.height}@${command.fps}")
+                        
                         // Forward to Activity; Activity will restart camera pipeline.
                         val intent = Intent("com.example.camcontrol.CAMERA_COMMAND").apply {
                             setPackage(packageName)
@@ -235,7 +247,7 @@ class CamControlService : Service() {
                             putExtra("highSpeed", command.highSpeed)
                         }
                         sendBroadcast(intent)
-                        // Optionally reconfigure encoder to match; rebroadcast surface
+                        // Reconfigure encoder to match; rebroadcast surface
                         serviceScope.launch(Dispatchers.IO) {
                             encoderMutex.withLock {
                                 try {
@@ -297,7 +309,10 @@ class CamControlService : Service() {
                         val value = command.codec.lowercase()
                         val mapped = if (value == "h265" || value == "hevc") "h265" else "h264"
                         Log.d(TAG, "🎚️ Codec change requested: ${mapped}")
-                        if (currentCodec == mapped) return@ControlServer
+                        if (videoEncoder.isRunning && currentCodec == mapped) {
+                            Log.d(TAG, "🎚️ Codec unchanged, skipping restart")
+                            return@ControlServer
+                        }
                         currentCodec = mapped
                         serviceScope.launch(Dispatchers.IO) {
                             encoderMutex.withLock {

@@ -68,7 +68,8 @@ Log (Recent Changes)
 - Dev tools: Added scripts to test and debug
   - `scripts/ws_probe.py` — quick binary/text probe
   - `scripts/ws_save_h264.py` — save WS H.264 to file (waits for SPS/IDR), remux externally
-  - `scripts/ws_record.py` — trigger on-device MP4 record via WS
+  - `scripts/record_on_device.py` — trigger on-device MP4 record via WS
+  - `scripts/archive/record_on_device_simple.py` — minimal legacy recorder
   - `scripts/log.sh` — updated to forward 9090
   - `scripts/webui.sh` — updated defaults for 9090
 - Tests: Updated WebSocket test scripts to 9090 and made them proxy-robust.

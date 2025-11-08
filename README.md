@@ -34,7 +34,8 @@ app/                         # Android application module
 scripts/
   ws_probe.py                # Quick check: text/binary frames
   ws_save_h264.py            # Save WS H.264 to file (waits for SPS/IDR)
-  ws_record.py               # Trigger on‑device MP4 recording via WS
+  record_on_device.py        # Trigger on-device MP4 recording via WS (recommended)
+  archive/record_on_device_simple.py # Minimal MP4 recorder (legacy)
   log.sh, webui.sh           # Dev helpers (port 9090)
 
 orin/
@@ -83,38 +84,47 @@ PROJECT_STATUS_SUMMARY.md    # Snapshot of current status
 - Remux to MP4: `ffmpeg -y -f h264 -i capture.h264 -c copy capture.mp4`
 
 ### Record video with custom quality settings (Mac)
-Record video directly from Android with configurable codec, bitrate, resolution:
+
+**Recommended: On-Device Recording (MediaMuxer)**
+
+Record video directly on Android with MediaMuxer for accurate timestamps and reliable quality:
 
 ```bash
-# Quick 10-second recording with defaults (H.264, 1080p@30, 8 Mbps)
-./scripts/record.sh -d 10
+# Quick 5-second recording with defaults (H.265, 1080p@30, 5 Mbps)
+python3 scripts/record_on_device.py -d 5
 
-# Record 30s H.264 video at 8 Mbps, 1920x1080@30fps
-./scripts/record.sh -d 30 -c h264 -b 8000000 -p 1920x1080@30
+# Custom quality 10-second recording
+python3 scripts/record_on_device.py -d 10 -c h265 -b 8000000 --profile 1920x1080@30
 
-# Record 60s H.265 video at 12 Mbps, 4K@30fps
-./scripts/record.sh -d 60 -c h265 -b 12000000 -p 3840x2160@30
-
-# Record 720p@60fps at 6 Mbps
-./scripts/record.sh -d 20 -c h264 -b 6000000 -p 1280x720@60
+# High quality 4K recording with zoom
+python3 scripts/record_on_device.py -d 30 -c h265 -b 15000000 --profile 3840x2160@30 -z 2.0
 ```
 
-Features:
-- Auto-generates timestamped filenames: `YYYYMMDD_HHMMSS_codec_resolution_bitrate_duration.{h264|h265|mp4}`
-- Saves to `saved_videos/` directory
-- Auto-converts to MP4 if ffmpeg is installed
-- Real-time progress updates and statistics
-- Configures encoder before recording (codec, bitrate, profile)
+**Features**:
+- ✅ **Accurate timestamps** - Video duration matches recording time
+- ✅ **Auto file retrieval** - Pulls MP4 from device automatically  
+- ✅ **Configurable quality** - Codec, bitrate, resolution, fps, zoom
+- ✅ **Timestamped filenames** - `YYYYMMDD_HHMMSS_codec_resolution_fps_bitrate_duration.mp4`
+- ✅ **Video info display** - Shows duration, fps, frame count
 
-Parameters:
+**Parameters**:
 - `-d, --duration` — Recording duration in seconds (required)
-- `-c, --codec` — h264 or h265 (default: h264)
-- `-b, --bitrate` — Bitrate in bps (auto-selected by resolution if not specified)
-- `-p, --profile` — WIDTHxHEIGHT@FPS (e.g., 1920x1080@30, 3840x2160@30)
-- `-H, --host` — Android IP address (default: 172.16.31.5)
-- `-o, --output` — Output directory (default: saved_videos)
+- `-c, --codec` — h264 or h265 (default: h265)
+- `-b, --bitrate` — Bitrate in bps (default: 5000000)
+- `--profile` — WIDTHxHEIGHT@FPS (default: 1920x1080@30)
+- `-z, --zoom` — Zoom ratio (default: 1.0)
+- `-H, --host` — WebSocket host (default: localhost)
 
-Note: Make sure the Android app is running before recording.
+**Alternative: WebSocket Streaming** (⚠️ has timestamp compression issues)
+
+```bash
+# Using record.sh wrapper (less reliable)
+./scripts/record.sh -d 10 -c h264 -b 8000000 -p 1920x1080@30
+```
+
+Note: WebSocket streaming recordings have compressed timestamps (5s recording → ~1-2s video). Use `record_on_device.py` for accurate recordings. 
+
+**For more recording options and troubleshooting**, see `scripts/README.md`
 
 ### Orin — Display/Decode
 - Install deps (Jetson): `python3-gi`, `gir1.2-gstreamer-1.0`, GStreamer plugins, `nvidia-l4t-gstreamer`, `websockets`.

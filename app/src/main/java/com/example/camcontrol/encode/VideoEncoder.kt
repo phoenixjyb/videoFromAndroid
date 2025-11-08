@@ -27,6 +27,9 @@ class VideoEncoder(
     @Volatile private var muxerSink: MuxerSink? = null
     @Volatile private var lastOutputFormat: MediaFormat? = null
     @Volatile private var drainJob: Job? = null
+    
+    val isRunning: Boolean
+        get() = drainJob != null && mediaCodec != null
 
     companion object {
         private const val TAG = "VideoEncoder"

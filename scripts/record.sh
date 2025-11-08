@@ -1,6 +1,8 @@
 #!/bin/bash
-# Convenience wrapper for record_video.py
-# Activates venv and runs the script with proxy bypass for localhost
+# Wrapper for the recommended MediaMuxer recorder.
+#
+# Calls record_on_device.py so CLI users can keep muscle memory with record.sh.
+# If you need the legacy WebSocket recorder, run record_video.py directly.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -16,4 +18,4 @@ fi
 export NO_PROXY="localhost,127.0.0.1${NO_PROXY:+,$NO_PROXY}"
 export no_proxy="localhost,127.0.0.1${no_proxy:+,$no_proxy}"
 
-python scripts/record_video.py "$@"
+python3 scripts/record_on_device.py "$@"
