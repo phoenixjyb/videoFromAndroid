@@ -134,6 +134,27 @@ Note: WebSocket streaming recordings have compressed timestamps (5s recording �
 - `python3 orin/ws_h264_rtsp_server.py --host <android-ip> --codec h265`
 - Play: `rtsp://<orin-ip>:8554/cam`
 
+### Orin — ROS2 Image Publisher (Quick Start)
+- Prereqs: `android-tools-adb`, ROS2 Humble, GStreamer deps, and the `ros2_camcontrol` package built (`colcon build --symlink-install`).
+- With the Android phone connected over USB and the CamControl app streaming, run:
+  ```bash
+  ./quick_start.sh
+  ```
+  This script verifies ADB connectivity, forwards `localhost:9100 → device:9090`, sources the ROS2 workspace, and launches `ros2_camcontrol.ws_to_image` targeting `/recomo/rgb` at 10 Hz (HEVC by default).
+- To collect a one-shot snapshot of CPU usage, topic rate, and recent logs, use the diagnostics helper:
+  ```bash
+  ./scripts/stream_diagnostics.sh              # runs quick_start, samples ros2 topic hz, tails logs
+  ./scripts/stream_diagnostics.sh --dry-run-publish  # skip publishing to measure pipeline latency only
+  ```
+- While the node is running you can inspect the ROS graph:
+  ```bash
+  source /opt/ros/humble/setup.bash
+  source /home/nvidia/videoFromAndroid/orin/ros2_camcontrol/install/setup.bash
+  ros2 topic hz /recomo/rgb --window 50
+  ros2 topic echo /recomo/rgb --once
+  ```
+  The default stream from the phone is 1920×1080 RGB images published on `/recomo/rgb` with matching `/recomo/camera_info`.
+
 ### Orin — ROS2 Image Publisher
 - ROS2 Humble: `source /opt/ros/humble/setup.bash`
 - Build: `cd orin/ros2_camcontrol && colcon build --symlink-install && source install/setup.bash`

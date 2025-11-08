@@ -69,16 +69,37 @@ DIARY.md / PROJECT_STATUS_SUMMARY.md
 
 ### Orin — 显示/解码
 - 安装依赖：`python3-gi`、`gir1.2-gstreamer-1.0`、GStreamer 插件、`nvidia-l4t-gstreamer`、`websockets`。
-- 运行：`python3 orin/ws_h264_gst.py --host <android-ip>`
+- 运行：`python3 orin/ws_h264_gst.py --host <android-ip> --codec h265`（默认手机推送 HEVC，如需 H.264 请加 `--codec h264`）
 
 ### Orin — RTSP 转发
 - `python3 orin/ws_h264_rtsp_server.py --host <android-ip>`
 - 播放：`rtsp://<orin-ip>:8554/cam`
 
+### Orin — ROS2 图像发布（快速启动）
+- 前置条件：`android-tools-adb`、ROS2 Humble、GStreamer 依赖，并已在 `orin/ros2_camcontrol` 下执行 `colcon build --symlink-install`。
+- 将安卓手机通过 USB 连接并打开 CamControl App 后，运行：
+  ```bash
+  ./quick_start.sh
+  ```
+  脚本会检测 ADB、建立 `localhost:9100 → device:9090` 转发、source ROS2 环境，并以 10 Hz（HEVC）启动 `ros2_camcontrol.ws_to_image`，输出主题 `/recomo/rgb` 与 `/recomo/camera_info`。
+- 如需一次性收集 CPU 占用、话题频率、最近日志，可使用诊断脚本：
+  ```bash
+  ./scripts/stream_diagnostics.sh
+  ./scripts/stream_diagnostics.sh --dry-run-publish  # 跳过发布，仅测 pipeline 延迟
+  ```
+- 节点运行期间，可在新终端查看 ROS2 信息：
+  ```bash
+  source /opt/ros/humble/setup.bash
+  source /home/nvidia/videoFromAndroid/orin/ros2_camcontrol/install/setup.bash
+  ros2 topic hz /recomo/rgb --window 50
+  ros2 topic echo /recomo/rgb --once
+  ```
+  默认解码分辨率为 1920×1080，并发布 RGB 图像帧。
+
 ### Orin — ROS2 图像发布
 - ROS2 Humble：`source /opt/ros/humble/setup.bash`
 - 构建：`cd orin/ros2_camcontrol && colcon build --symlink-install && source install/setup.bash`
-- 运行：`ros2 run ros2_camcontrol ws_to_image --host <android-ip> --topic /camera/image_rgb`
+- 运行：`ros2 run ros2_camcontrol ws_to_image --host <android-ip> --topic /recomo/rgb --rate 10 --codec h265`
 
 ## 已完成
 - 统一端口 9090；单 WS 同时承载控制/遥测/视频。
