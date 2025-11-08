@@ -58,13 +58,23 @@ class WSH264ToImage(Node):
         if self._codec in ('h265', 'hevc'):
             caps = 'video/x-h265,stream-format=byte-stream,alignment=au'
             parse = 'h265parse config-interval=-1'
-            hw_decode = f'{parse} ! nvv4l2decoder ! nvvidconv ! video/x-raw,format=RGB'
-            sw_decode = f'{parse} ! avdec_h265 ! videoconvert ! video/x-raw,format=RGB'
+            hw_decode = (
+                f"{parse} ! queue leaky=downstream max-size-buffers=1 max-size-time=0 max-size-bytes=0 "
+                "! nvv4l2decoder disable-dpb=true enable-max-performance=true "
+                "! nvvidconv ! video/x-raw,format=RGBA "
+                "! videoconvert ! video/x-raw,format=RGB"
+            )
+            sw_decode = f"{parse} ! avdec_h265 ! videoconvert ! video/x-raw,format=RGB"
         else:
             caps = 'video/x-h264,stream-format=byte-stream,alignment=au'
             parse = 'h264parse config-interval=-1'
-            hw_decode = f'{parse} ! nvv4l2decoder ! nvvidconv ! video/x-raw,format=RGB'
-            sw_decode = f'{parse} ! avdec_h264 ! videoconvert ! video/x-raw,format=RGB'
+            hw_decode = (
+                f"{parse} ! queue leaky=downstream max-size-buffers=1 max-size-time=0 max-size-bytes=0 "
+                "! nvv4l2decoder disable-dpb=true enable-max-performance=true "
+                "! nvvidconv ! video/x-raw,format=RGBA "
+                "! videoconvert ! video/x-raw,format=RGB"
+            )
+            sw_decode = f"{parse} ! avdec_h264 ! videoconvert ! video/x-raw,format=RGB"
             self._codec = 'h264'
 
         if use_hw and Gst.ElementFactory.find('nvv4l2decoder'):
@@ -72,12 +82,20 @@ class WSH264ToImage(Node):
         else:
             decode = sw_decode
 
-        desc = f"appsrc name=src is-live=true format=time do-timestamp=true caps={caps} ! {decode} ! appsink name=sink emit-signals=true max-buffers=1 drop=true"
+        desc = (
+            "appsrc name=src is-live=true format=time do-timestamp=true "
+            f"caps={caps} ! {decode} ! "
+            "appsink name=sink emit-signals=true max-buffers=1 drop=true sync=false"
+        )
         self.pipeline = Gst.parse_launch(desc)
         self.appsrc = self.pipeline.get_by_name('src')
         self._appsink = self.pipeline.get_by_name('sink')
         self._appsink.connect('new-sample', self.on_new_sample)
         self.appsrc.set_property('block', True)
+        self.appsrc.set_property('format', Gst.Format.TIME)
+        self.appsrc.set_property('do-timestamp', True)
+        self.appsrc.set_property('is-live', True)
+        self.appsrc.set_property('max-bytes', 1 << 20)  # 1 MB buffer
         self.pipeline.set_state(Gst.State.PLAYING)
 
         if target_rate_hz > 0:
@@ -172,6 +190,15 @@ class WSH264ToImage(Node):
         s = caps.get_structure(0)
         width = s.get_value('width')
         height = s.get_value('height')
+        
+        # Debug: Log that we received a frame
+        if not hasattr(self, '_frame_count'):
+            self._frame_count = 0
+            self.get_logger().info(f"First decoded frame received: {width}x{height}")
+        self._frame_count += 1
+        if self._frame_count % 30 == 0:
+            self.get_logger().info(f"Decoded {self._frame_count} frames")
+        
         success, mapinfo = buf.map(Gst.MapFlags.READ)
         if not success:
             return Gst.FlowReturn.OK
@@ -222,17 +249,26 @@ class WSH264ToImage(Node):
 
     def _ws_main(self):
         disable_proxies()
+        
+        frame_count = [0]  # Use list to allow modification in nested function
 
         async def reader():
             async with websockets.connect(self.url, open_timeout=5) as ws:
+                self.get_logger().info(f"WebSocket connected to {self.url}")
                 while True:
                     try:
                         msg = await asyncio.wait_for(ws.recv(), timeout=5)
                     except asyncio.TimeoutError:
                         continue
-                    except Exception:
+                    except Exception as e:
+                        self.get_logger().error(f"WebSocket error: {e}")
                         break
                     if isinstance(msg, (bytes, bytearray)):
+                        frame_count[0] += 1
+                        if frame_count[0] == 1:
+                            self.get_logger().info(f"First video frame received: {len(msg)} bytes")
+                        if frame_count[0] % 30 == 0:
+                            self.get_logger().info(f"Received {frame_count[0]} video frames from WebSocket")
                         data = bytes(msg)
                         buf = Gst.Buffer.new_allocate(None, len(data), None)
                         buf.fill(0, data)

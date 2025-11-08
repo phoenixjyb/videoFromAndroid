@@ -18,6 +18,11 @@ captures/
 __pycache__/
 *.pyc
 
+# ROS2 build artifacts
+/orin/ros2_camcontrol/build/
+/orin/ros2_camcontrol/install/
+/orin/ros2_camcontrol/log/
+
 # Logs and recordings
 /logs/
 *.log
