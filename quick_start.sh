@@ -9,6 +9,13 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}=== CamControl Quick Start ===${NC}"
 
+# Ensure adb is available
+if ! command -v adb >/dev/null 2>&1; then
+    echo -e "${RED}ERROR: adb command not found${NC}"
+    echo "Install Android platform tools (e.g. sudo apt install android-tools-adb) and retry"
+    exit 1
+fi
+
 # Disable proxies for localhost connections
 export no_proxy='localhost,127.0.0.1,*'
 export NO_PROXY='localhost,127.0.0.1,*'
@@ -66,10 +73,14 @@ echo "  - /recomo/rgb (sensor_msgs/Image)"
 echo "  - /recomo/camera_info (sensor_msgs/CameraInfo)"
 echo -e "\n${YELLOW}Press Ctrl+C to stop${NC}\n"
 
-PYTHONPATH=/home/nvidia/videoFromAndroid/orin/ros2_camcontrol/build/ros2_camcontrol:$PYTHONPATH \
+TIMING_INTERVAL=${WS_TIMING_SAMPLE_INTERVAL:-60}
+WS_TIMING_SAMPLE_INTERVAL=${TIMING_INTERVAL} \
+PYTHONPATH=/home/nvidia/videoFromAndroid/orin/ros2_camcontrol:/home/nvidia/videoFromAndroid/orin/ros2_camcontrol/build/ros2_camcontrol:$PYTHONPATH \
 exec python3 -m ros2_camcontrol.ws_to_image \
     --host 127.0.0.1 \
     --port 9100 \
     --topic /recomo/rgb \
     --rate 10 \
-    --codec h265
+    --codec h265 \
+    --timing-sample-interval "${TIMING_INTERVAL}" \
+    "$@"
