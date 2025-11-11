@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CamViewer</string>
+    
+    <!-- Navigation -->
+    <string name="nav_video">Video</string>
+    <string name="nav_media">Media</string>
+    <string name="nav_settings">Settings</string>
+    
+    <!-- Video Screen -->
+    <string name="video_connecting">Connecting to camera…</string>
+    <string name="video_connected">Connected</string>
+    <string name="video_disconnected">Disconnected</string>
+    <string name="video_error">Connection error: %s</string>
+    <string name="video_tap_target">Tap to select target</string>
+    <string name="video_target_sent">Target sent to tracker</string>
+    
+    <!-- Media Screen -->
+    <string name="media_title">Recorded Media</string>
+    <string name="media_empty">No recorded media found</string>
+    <string name="media_loading">Loading media library…</string>
+    <string name="media_error">Error loading media: %s</string>
+    <string name="media_filter">Filter</string>
+    <string name="media_sort">Sort</string>
+    <string name="media_download">Download</string>
+    <string name="media_delete">Delete</string>
+    <string name="media_downloading">Downloading… %d%%</string>
+    <string name="media_download_complete">Download complete</string>
+    <string name="media_download_failed">Download failed: %s</string>
+    
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_camera">Camera Connection</string>
+    <string name="settings_camera_url">Camera URL</string>
+    <string name="settings_camera_url_hint">ws://192.168.1.100:9090</string>
+    <string name="settings_orin">Orin Connection</string>
+    <string name="settings_orin_target_url">Target API URL</string>
+    <string name="settings_orin_target_url_hint">http://192.168.1.200:8080</string>
+    <string name="settings_orin_media_url">Media API URL</string>
+    <string name="settings_orin_media_url_hint">http://192.168.1.200:8081</string>
+    <string name="settings_developer_mode">Developer Mode</string>
+    <string name="settings_developer_mode_summary">Enable camera control panel</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_saved">Settings saved</string>
+    
+    <!-- Developer Mode -->
+    <string name="dev_camera_controls">Camera Controls</string>
+    <string name="dev_zoom">Zoom</string>
+    <string name="dev_focus">Focus</string>
+    <string name="dev_exposure">Exposure</string>
+    <string name="dev_codec">Codec</string>
+    <string name="dev_bitrate">Bitrate</string>
+    <string name="dev_fps">FPS</string>
+    <string name="dev_profile">Profile</string>
+    <string name="dev_send_command">Send</string>
+    
+    <!-- Common -->
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="retry">Retry</string>
+    <string name="close">Close</string>
+    <string name="refresh">Refresh</string>
+    
+    <!-- Telemetry -->
+    <string name="telemetry_fps">FPS: %s</string>
+    <string name="telemetry_bitrate">Bitrate: %s</string>
+    <string name="telemetry_latency">Latency: %dms</string>
+    <string name="telemetry_resolution" formatted="false">Resolution: %dx%d</string>
+</resources>

@@ -16,4 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "camControl"
 include(":app")
+include(":camviewer")
 
