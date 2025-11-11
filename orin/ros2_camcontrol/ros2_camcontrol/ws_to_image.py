@@ -9,11 +9,13 @@ import inspect
 import time
 from pathlib import Path
 from typing import Optional
+from queue import Queue
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image, CameraInfo
+from std_msgs.msg import String
 
 import websockets
 import gi
@@ -42,12 +44,17 @@ class WSH264ToImage(Node):
         codec: str,
         timing_sample_interval: int,
         dry_run_publish: bool,
+        enable_camera_control: bool,
     ):
         super().__init__('ws_h264_to_image')
         self.host = host
         self.port = port
         self.url = f"ws://{host}:{port}/control"
         self.frame_id = frame_id
+        
+        # Command queue for sending to WebSocket
+        self._cmd_queue = Queue()
+        self._ws_connection = None
         
         # Use BEST_EFFORT QoS for real-time image streaming
         # This prevents blocking when there are no subscribers or slow subscribers
@@ -61,6 +68,31 @@ class WSH264ToImage(Node):
         self.publisher = self.create_publisher(Image, image_topic, qos)
         self.camera_info_pub = self.create_publisher(CameraInfo, info_topic, qos)
         self._camera_info_template = self._load_camera_info(camera_info_path, frame_id)
+        
+        # Camera control subscribers (if enabled)
+        self._enable_camera_control = enable_camera_control
+        if enable_camera_control:
+            # Subscribe to camera command topics with reliable QoS for commands
+            cmd_qos = QoSProfile(
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.VOLATILE,
+                history=HistoryPolicy.KEEP_LAST,
+                depth=10
+            )
+            
+            # Individual command topics
+            self.create_subscription(String, f'{image_topic}/cmd/zoom', self._zoom_callback, cmd_qos)
+            self.create_subscription(String, f'{image_topic}/cmd/camera', self._camera_callback, cmd_qos)
+            self.create_subscription(String, f'{image_topic}/cmd/lock', self._lock_callback, cmd_qos)
+            self.create_subscription(String, f'{image_topic}/cmd/record', self._record_callback, cmd_qos)
+            self.create_subscription(String, f'{image_topic}/cmd/profile', self._profile_callback, cmd_qos)
+            self.create_subscription(String, f'{image_topic}/cmd/keyframe', self._keyframe_callback, cmd_qos)
+            
+            # Telemetry publisher
+            self.telemetry_pub = self.create_publisher(String, f'{image_topic}/telemetry', qos)
+            
+            self.get_logger().info(f"Camera control enabled on {image_topic}/cmd/* topics")
+        
         self._pts = 0
         self._appsink = None
         self._publish_period_ns = 0
@@ -224,6 +256,87 @@ class WSH264ToImage(Node):
         except Exception as exc:
             self.get_logger().warning(f"Camera info file '{path}' had unexpected values: {exc}")
         return msg
+
+    # Camera control callbacks
+    def _send_command(self, cmd_dict):
+        """Queue a command to be sent over WebSocket"""
+        if not self._enable_camera_control:
+            return
+        self._cmd_queue.put(cmd_dict)
+        self.get_logger().debug(f"Queued command: {cmd_dict}")
+    
+    def _zoom_callback(self, msg):
+        """Handle zoom ratio command: e.g., '2.5' for 2.5x zoom"""
+        try:
+            zoom_ratio = float(msg.data)
+            self._send_command({"cmd": "setZoomRatio", "value": zoom_ratio})
+            self.get_logger().info(f"Set zoom to {zoom_ratio}x")
+        except ValueError as e:
+            self.get_logger().error(f"Invalid zoom value '{msg.data}': {e}")
+    
+    def _camera_callback(self, msg):
+        """Handle camera switch command: 'front' or 'back'"""
+        facing = msg.data.strip().lower()
+        if facing in ['front', 'back']:
+            self._send_command({"cmd": "switchCamera", "facing": facing})
+            self.get_logger().info(f"Switching to {facing} camera")
+        else:
+            self.get_logger().error(f"Invalid camera facing '{msg.data}', use 'front' or 'back'")
+    
+    def _lock_callback(self, msg):
+        """Handle AE/AWB lock command: 'ae:true', 'ae:false', 'awb:true', 'awb:false'"""
+        try:
+            lock_type, value_str = msg.data.strip().lower().split(':', 1)
+            value = value_str == 'true'
+            if lock_type == 'ae':
+                self._send_command({"cmd": "setAeLock", "value": value})
+                self.get_logger().info(f"Set AE lock: {value}")
+            elif lock_type == 'awb':
+                self._send_command({"cmd": "setAwbLock", "value": value})
+                self.get_logger().info(f"Set AWB lock: {value}")
+            else:
+                self.get_logger().error(f"Invalid lock type '{lock_type}', use 'ae' or 'awb'")
+        except ValueError as e:
+            self.get_logger().error(f"Invalid lock command '{msg.data}': {e}. Format: 'ae:true' or 'awb:false'")
+    
+    def _record_callback(self, msg):
+        """Handle recording command: 'start' or 'stop'"""
+        action = msg.data.strip().lower()
+        if action == 'start':
+            self._send_command({"cmd": "startRecording"})
+            self.get_logger().info("Starting recording")
+        elif action == 'stop':
+            self._send_command({"cmd": "stopRecording"})
+            self.get_logger().info("Stopping recording")
+        else:
+            self.get_logger().error(f"Invalid record action '{msg.data}', use 'start' or 'stop'")
+    
+    def _profile_callback(self, msg):
+        """Handle video profile command: 'WIDTHxHEIGHT@FPS' e.g., '1920x1080@30'"""
+        try:
+            # Parse format: 1920x1080@30 or 1920x1080@30@1 (high speed)
+            parts = msg.data.strip().split('@')
+            res_parts = parts[0].split('x')
+            width = int(res_parts[0])
+            height = int(res_parts[1])
+            fps = int(parts[1])
+            high_speed = len(parts) > 2 and parts[2] == '1'
+            
+            self._send_command({
+                "cmd": "setVideoProfile",
+                "width": width,
+                "height": height,
+                "fps": fps,
+                "highSpeed": high_speed
+            })
+            self.get_logger().info(f"Set profile: {width}x{height}@{fps}" + (" (high speed)" if high_speed else ""))
+        except (ValueError, IndexError) as e:
+            self.get_logger().error(f"Invalid profile '{msg.data}': {e}. Format: 'WIDTHxHEIGHT@FPS'")
+    
+    def _keyframe_callback(self, msg):
+        """Handle keyframe request command"""
+        self._send_command({"cmd": "requestKeyFrame"})
+        self.get_logger().info("Requesting keyframe")
 
     def on_new_sample(self, sink):
         sample = sink.emit('pull-sample')
@@ -413,35 +526,79 @@ class WSH264ToImage(Node):
 
             async with websockets.connect(self.url, **connect_kwargs) as ws:
                 self.get_logger().info(f"WebSocket connected to {self.url}")
-                while True:
-                    try:
-                        msg = await asyncio.wait_for(ws.recv(), timeout=5)
-                    except asyncio.TimeoutError:
-                        continue
-                    except Exception as e:
-                        self.get_logger().error(f"WebSocket error: {e}")
-                        break
-                    if isinstance(msg, (bytes, bytearray)):
-                        frame_count[0] += 1
-                        if frame_count[0] == 1:
-                            self.get_logger().info(f"First video frame received: {len(msg)} bytes")
-                        if frame_count[0] % 30 == 0:
-                            self.get_logger().info(f"Received {frame_count[0]} video frames from WebSocket")
-                        data = bytes(msg)
-                        buf = Gst.Buffer.new_allocate(None, len(data), None)
-                        buf.fill(0, data)
-                        dur = int(1e9/30)
-                        buf.pts = self._pts
-                        buf.dts = self._pts
-                        buf.duration = dur
-                        self._pts += dur
-                        push_start = time.perf_counter_ns()
-                        ret = self.appsrc.emit('push-buffer', buf)
-                        if frame_count[0] % push_timing_interval == 0:
-                            push_ms = (time.perf_counter_ns() - push_start) / 1e6
-                            self.get_logger().info(
-                                f"push-buffer ret={ret} count={frame_count[0]} took {push_ms:.2f}ms"
-                            )
+                self._ws_connection = ws
+                
+                # Create sender task for commands
+                async def sender():
+                    """Send queued commands to WebSocket"""
+                    while True:
+                        try:
+                            # Check command queue periodically
+                            await asyncio.sleep(0.01)  # 10ms poll interval
+                            if not self._cmd_queue.empty():
+                                cmd = self._cmd_queue.get_nowait()
+                                cmd_json = json.dumps(cmd)
+                                await ws.send(cmd_json)
+                                self.get_logger().debug(f"Sent command: {cmd_json}")
+                        except Exception as e:
+                            self.get_logger().error(f"Sender error: {e}")
+                            break
+                
+                # Start sender task
+                sender_task = asyncio.create_task(sender()) if self._enable_camera_control else None
+                
+                try:
+                    while True:
+                        try:
+                            msg = await asyncio.wait_for(ws.recv(), timeout=5)
+                        except asyncio.TimeoutError:
+                            continue
+                        except Exception as e:
+                            self.get_logger().error(f"WebSocket error: {e}")
+                            break
+                        
+                        if isinstance(msg, (bytes, bytearray)):
+                            # Binary frame (video)
+                            frame_count[0] += 1
+                            if frame_count[0] == 1:
+                                self.get_logger().info(f"First video frame received: {len(msg)} bytes")
+                            if frame_count[0] % 30 == 0:
+                                self.get_logger().info(f"Received {frame_count[0]} video frames from WebSocket")
+                            data = bytes(msg)
+                            buf = Gst.Buffer.new_allocate(None, len(data), None)
+                            buf.fill(0, data)
+                            dur = int(1e9/30)
+                            buf.pts = self._pts
+                            buf.dts = self._pts
+                            buf.duration = dur
+                            self._pts += dur
+                            push_start = time.perf_counter_ns()
+                            ret = self.appsrc.emit('push-buffer', buf)
+                            if frame_count[0] % push_timing_interval == 0:
+                                push_ms = (time.perf_counter_ns() - push_start) / 1e6
+                                self.get_logger().info(
+                                    f"push-buffer ret={ret} count={frame_count[0]} took {push_ms:.2f}ms"
+                                )
+                        elif isinstance(msg, str):
+                            # Text frame (telemetry)
+                            if self._enable_camera_control:
+                                try:
+                                    telemetry_data = json.loads(msg)
+                                    # Publish telemetry as JSON string
+                                    telemetry_msg = String()
+                                    telemetry_msg.data = msg
+                                    self.telemetry_pub.publish(telemetry_msg)
+                                    self.get_logger().debug(f"Telemetry: {telemetry_data}")
+                                except json.JSONDecodeError:
+                                    self.get_logger().warning(f"Invalid JSON telemetry: {msg}")
+                finally:
+                    if sender_task:
+                        sender_task.cancel()
+                        try:
+                            await sender_task
+                        except asyncio.CancelledError:
+                            pass
+                    self._ws_connection = None
         asyncio.run(reader())
 
 
@@ -466,6 +623,11 @@ def main(argv=None):
         '--dry-run-publish',
         action='store_true',
         help='Skip publisher.publish calls to measure pipeline throughput without ROS backpressure'
+    )
+    parser.add_argument(
+        '--enable-control',
+        action='store_true',
+        help='Enable camera control via ROS2 topics (zoom, camera switch, locks, recording, etc.)'
     )
     args = parser.parse_args(argv)
 
@@ -498,6 +660,7 @@ def main(argv=None):
         codec=args.codec,
         timing_sample_interval=args.timing_sample_interval,
         dry_run_publish=args.dry_run_publish,
+        enable_camera_control=args.enable_control,
     )
     try:
         rclpy.spin(node)

@@ -20,6 +20,7 @@ setup(
         'console_scripts': [
             'ws_to_image = ros2_camcontrol.ws_to_image:main',
             'image_saver = ros2_camcontrol.image_saver:main',
+            'camera_control_test = ros2_camcontrol.camera_control_test:main',
         ],
     },
 )
