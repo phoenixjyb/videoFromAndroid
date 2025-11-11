@@ -24,9 +24,9 @@ class SettingsRepository @Inject constructor(
     
     val settings: Flow<AppSettings> = dataStore.data.map { preferences ->
         AppSettings(
-            cameraUrl = preferences[PreferencesKeys.CAMERA_URL] ?: "ws://192.168.1.100:9090",
-            orinTargetUrl = preferences[PreferencesKeys.ORIN_TARGET_URL] ?: "http://192.168.1.200:8080",
-            orinMediaUrl = preferences[PreferencesKeys.ORIN_MEDIA_URL] ?: "http://192.168.1.200:8081",
+            cameraUrl = preferences[PreferencesKeys.CAMERA_URL] ?: "ws://172.16.30.28:9090",
+            orinTargetUrl = preferences[PreferencesKeys.ORIN_TARGET_URL] ?: "http://172.16.30.234:8080",
+            orinMediaUrl = preferences[PreferencesKeys.ORIN_MEDIA_URL] ?: "http://172.16.30.234:8081",
             developerModeEnabled = preferences[PreferencesKeys.DEVELOPER_MODE] ?: false
         )
     }

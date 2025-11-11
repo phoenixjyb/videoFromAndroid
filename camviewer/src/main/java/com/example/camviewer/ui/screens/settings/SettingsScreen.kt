@@ -83,7 +83,7 @@ fun SettingsScreen(
             value = cameraUrl,
             onValueChange = { cameraUrl = it },
             label = { Text("Camera WebSocket URL") },
-            placeholder = { Text("ws://192.168.1.100:9090") },
+            placeholder = { Text("ws://172.16.30.28:9090") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -106,7 +106,7 @@ fun SettingsScreen(
             value = orinTargetUrl,
             onValueChange = { orinTargetUrl = it },
             label = { Text("Target API URL") },
-            placeholder = { Text("http://192.168.1.200:8080") },
+            placeholder = { Text("http://172.16.30.234:8080") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -115,7 +115,7 @@ fun SettingsScreen(
             value = orinMediaUrl,
             onValueChange = { orinMediaUrl = it },
             label = { Text("Media API URL") },
-            placeholder = { Text("http://192.168.1.200:8081") },
+            placeholder = { Text("http://172.16.30.234:8081") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )

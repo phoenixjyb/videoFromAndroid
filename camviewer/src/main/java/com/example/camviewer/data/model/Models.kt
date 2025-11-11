@@ -97,8 +97,8 @@ data class TargetCoordinates(
  * Settings/preferences data
  */
 data class AppSettings(
-    val cameraUrl: String = "ws://192.168.1.100:9090",
-    val orinTargetUrl: String = "http://192.168.1.200:8080",
-    val orinMediaUrl: String = "http://192.168.1.200:8081",
+    val cameraUrl: String = "ws://172.16.30.28:9090",
+    val orinTargetUrl: String = "http://172.16.30.234:8080",
+    val orinMediaUrl: String = "http://172.16.30.234:8081",
     val developerModeEnabled: Boolean = false
 )

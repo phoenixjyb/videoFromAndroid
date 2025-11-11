@@ -9,6 +9,7 @@ import com.example.camviewer.data.model.ConnectionState
 import com.example.camviewer.data.model.Telemetry
 import com.example.camviewer.data.repository.SettingsRepository
 import com.example.camviewer.network.CamControlWebSocketClient
+import com.example.camviewer.network.OrinTargetClient
 import com.example.camviewer.video.VideoDecoder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -26,7 +27,8 @@ private const val TAG = "VideoViewModel"
 class VideoViewModel @Inject constructor(
     private val webSocketClient: CamControlWebSocketClient,
     private val videoDecoder: VideoDecoder,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val orinTargetClient: OrinTargetClient
 ) : ViewModel() {
     
     val connectionState: StateFlow<ConnectionState> = webSocketClient.connectionState
@@ -155,7 +157,23 @@ class VideoViewModel @Inject constructor(
      * Send target coordinates (x, y normalized 0.0-1.0)
      */
     fun sendTargetCoordinates(x: Float, y: Float) {
-        // Will be implemented in Phase 3
+        viewModelScope.launch {
+            try {
+                val settings = settingsRepository.settings.first()
+                val result = orinTargetClient.sendTargetCoordinates(
+                    baseUrl = settings.orinTargetUrl,
+                    x = x,
+                    y = y
+                )
+                if (result.isSuccess) {
+                    Log.i(TAG, "Target coordinates sent: ($x, $y)")
+                } else {
+                    Log.e(TAG, "Failed to send target coordinates: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending target coordinates", e)
+            }
+        }
     }
     
     /**

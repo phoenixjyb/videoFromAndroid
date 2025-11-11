@@ -46,7 +46,7 @@ class CamControlWebSocketClient @Inject constructor(
     
     /**
      * Connect to CamControl WebSocket server
-     * @param url WebSocket URL (e.g., "ws://192.168.1.100:9090")
+     * @param url WebSocket URL (e.g., "ws://172.16.30.28:9090")
      */
     suspend fun connect(url: String) {
         if (_connectionState.value is ConnectionState.Connected || 
