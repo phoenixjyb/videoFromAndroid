@@ -177,6 +177,36 @@ class VideoViewModel @Inject constructor(
     }
     
     /**
+     * Send target ROI (Region of Interest) with bounding box
+     * 
+     * @param x Top-left x coordinate (normalized 0.0-1.0)
+     * @param y Top-left y coordinate (normalized 0.0-1.0)
+     * @param width ROI width (normalized 0.0-1.0)
+     * @param height ROI height (normalized 0.0-1.0)
+     */
+    fun sendTargetROI(x: Float, y: Float, width: Float, height: Float) {
+        viewModelScope.launch {
+            try {
+                val settings = settingsRepository.settings.first()
+                val result = orinTargetClient.sendTargetROI(
+                    baseUrl = settings.orinTargetUrl,
+                    x = x,
+                    y = y,
+                    width = width,
+                    height = height
+                )
+                if (result.isSuccess) {
+                    Log.i(TAG, "Target ROI sent: x=$x, y=$y, w=$width, h=$height")
+                } else {
+                    Log.e(TAG, "Failed to send target ROI: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending target ROI", e)
+            }
+        }
+    }
+    
+    /**
      * Release resources
      */
     override fun onCleared() {
