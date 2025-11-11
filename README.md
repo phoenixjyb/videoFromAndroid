@@ -31,22 +31,47 @@ app/                         # Android application module
     transport/ControlCommand.kt, Telemetry.kt
   src/main/assets/index.html # Web UI (WebCodecs decode + controls)
 
-scripts/
-  ws_probe.py                # Quick check: text/binary frames
-  ws_save_h264.py            # Save WS H.264 to file (waits for SPS/IDR)
-  record_on_device.py        # Trigger on-device MP4 recording via WS (recommended)
-  archive/record_on_device_simple.py # Minimal MP4 recorder (legacy)
-  log.sh, webui.sh           # Dev helpers (port 9090)
+scripts/                     # Production recording & streaming scripts
+  record_on_device.py        # On-device MP4 recording (MediaMuxer)
+  record_video.py            # Stream capture with WebSocket
+  ws_probe.py, ws_save_h264.py, ws_cmd.py, ws_record.py
+  test_with_subscriber.sh    # ROS2 integration test
+  stream_diagnostics.sh      # Stream health monitoring
 
-orin/
+tools/                       # Development utilities
+  quick_start.sh             # Build, install, forward, start
+  quick_logs.sh              # Monitor Android logcat
+
+tests/                       # Test scripts and validation
+  test_websocket.py, test_commands.py, test_camera_switch.py
+  test_telemetry_ws.py, test_webui_commands.py
+  test_recomo_rgb_ros2.sh    # ROS2 integration test
+  webcodecs-selftest.html    # Browser WebCodecs validation
+
+orin/                        # Jetson Orin integration
   ws_h264_gst.py             # WS ingest → GStreamer decode/display (NVDEC)
   ws_h264_rtsp_server.py     # WS → RTSP restream (rtsp://<orin-ip>:8554/cam)
-  ros2_camcontrol/           # ROS2 Humble pkg (WS → sensor_msgs/Image)
-  README.md, ARCHITECTURE.md # Orin docs
+  ros2_camcontrol/           # ROS2 Humble pkg (WS → sensor_msgs/Image + camera control)
+    ros2_camcontrol/ws_to_image.py         # Main ROS2 node
+    ros2_camcontrol/camera_control_test.py # Interactive test tool
+    msg/                     # Custom ROS2 message types
+  CAMERA_CONTROL_USAGE.md    # Camera control guide
+  CAMERA_CONTROL_TEST_RESULTS.md # Test validation report
 
-README.md, README_zh.md      # Bilingual overview
-DIARY.md                     # Project diary & roadmap
-PROJECT_STATUS_SUMMARY.md    # Snapshot of current status
+docs/                        # Project documentation
+  DIARY.md                   # Project diary & roadmap
+  PROJECT_STATUS_SUMMARY.md  # Current status snapshot
+  ProjectSetup.md            # Initial setup guide
+  WIFI_ACCESS.md             # Network configuration
+
+device_info/                 # Hardware specifications
+  sms9160Capability.txt, sms9280Capability.txt
+  systemChart.txt            # System architecture diagram
+
+assets/                      # Images and media
+  logoRef.png                # Project logo
+
+README.md, README_zh.md      # Bilingual overview (this file)
 ```
 
 ## Protocols

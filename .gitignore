@@ -30,6 +30,10 @@ __pycache__/
 *.wav
 clip-*.mp4
 
+# Test outputs and saved data
+/saved_images/
+/saved_videos/
+
 # OS/editor files
 .DS_Store
 Thumbs.db

@@ -29,18 +29,47 @@ app/（Android 应用）
   transport/ControlServer.kt（Ktor HTTP+WS）/ ControlCommand.kt / Telemetry.kt
   assets/index.html        # Web UI（WebCodecs 解码 + 控件）
 
-scripts/
-  ws_probe.py / ws_save_h264.py / record_on_device.py  # 调试与抓流
-  log.sh / webui.sh                             # 开发辅助（端口 9090）
+scripts/                   # 生产级录制与流传输脚本
+  record_on_device.py      # 设备端 MP4 录制（MediaMuxer）
+  record_video.py          # WebSocket 流捕获
+  ws_probe.py, ws_save_h264.py, ws_cmd.py
+  test_with_subscriber.sh  # ROS2 集成测试
+  stream_diagnostics.sh    # 流健康监控
 
-orin/
-  ws_h264_gst.py             # WS 接入 → GStreamer 解码显示（NVDEC）
-  ws_h264_rtsp_server.py     # WS → RTSP（rtsp://<orin-ip>:8554/cam）
-  ros2_camcontrol/           # ROS2 Humble 包（WS → sensor_msgs/Image）
-  README.md / ARCHITECTURE.md
+tools/                     # 开发工具
+  quick_start.sh           # 构建、安装、转发、启动
+  quick_logs.sh            # 监控 Android 日志
 
-README.md / README_zh.md     # 双语总览
-DIARY.md / PROJECT_STATUS_SUMMARY.md
+tests/                     # 测试脚本与验证
+  test_websocket.py, test_commands.py, test_camera_switch.py
+  test_telemetry_ws.py, test_webui_commands.py
+  test_recomo_rgb_ros2.sh  # ROS2 集成测试
+  webcodecs-selftest.html  # 浏览器 WebCodecs 验证
+
+orin/                      # Jetson Orin 集成
+  ws_h264_gst.py           # WS 接入 → GStreamer 解码显示（NVDEC）
+  ws_h264_rtsp_server.py   # WS → RTSP（rtsp://<orin-ip>:8554/cam）
+  ros2_camcontrol/         # ROS2 Humble 包（WS → sensor_msgs/Image + 相机控制）
+    ros2_camcontrol/ws_to_image.py         # 主 ROS2 节点
+    ros2_camcontrol/camera_control_test.py # 交互式测试工具
+    msg/                   # 自定义 ROS2 消息类型
+  CAMERA_CONTROL_USAGE.md  # 相机控制指南
+  CAMERA_CONTROL_TEST_RESULTS.md # 测试验证报告
+
+docs/                      # 项目文档
+  DIARY.md                 # 项目日志与路线图
+  PROJECT_STATUS_SUMMARY.md # 当前状态快照
+  ProjectSetup.md          # 初始设置指南
+  WIFI_ACCESS.md           # 网络配置
+
+device_info/               # 硬件规格
+  sms9160Capability.txt, sms9280Capability.txt
+  systemChart.txt          # 系统架构图
+
+assets/                    # 图片与媒体
+  logoRef.png              # 项目图标
+
+README.md / README_zh.md   # 双语总览（本文件）
 ```
 
 ## 协议
