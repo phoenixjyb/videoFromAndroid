@@ -3,25 +3,68 @@
 English | [中文](README_zh.md)
 
 ## Overview
-- Purpose: Remote-control an Android phone camera, preview in a Mac web browser, and ingest/decode on Jetson Orin for processing or restreaming.
+- Purpose: Remote-control an Android phone camera, preview in a Mac web browser or Android viewer app, and ingest/decode on Jetson Orin for processing or restreaming.
 - Transport: One Ktor WebSocket endpoint on Android (`/control`, port `9090`) carries both control/telemetry (text JSON) and video (binary H.264 Annex‑B).
-- Status: End‑to‑end preview and control are working; Orin ingest/RTSP/ROS2 scaffolds are in place.
+- Status: End‑to‑end preview and control are working; Orin ingest/RTSP/ROS2 scaffolds are in place. **CamViewer** Android client app in development for interactive target selection.
+
+## System Components
+- **CamControl** (Android Server): Camera streaming and control server
+- **CamViewer** (Android Client): Video viewer with interactive target selection *(in development)*
+- **Web UI** (Browser): Web-based viewer and control interface
+- **Orin Backend**: Video processing, tracking, and ROS2 integration
+
+For detailed system architecture, see [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md).
 
 ## Architecture (Runtime)
 ```
-Mac (Browser)  ←→  Android CamControl (Ktor WS 9090)  →  Orin (WS ingest)
-    │  HTML/JS         └─ Camera2 + Encoder (H.264)         ├─ GStreamer NVDEC display
-    │  WebCodecs            ↑  Broadcast commands            ├─ RTSP restream (rtsp://:8554/cam)
-    └─ Controls JSON        │  Telemetry JSON                └─ ROS2 node publishes sensor_msgs/Image
+                    ┌──────────────────────────────────────────┐
+                    │      CamControl (Phone - SOURCE)        │
+                    │      📹 Video Broadcasting                │
+                    │   • Camera2 + MediaCodec Encoder         │
+                    │   • WebSocket Server :9090               │
+                    │   • Broadcasts to ALL clients            │
+                    └──────────────┬───────────────────────────┘
+                                   │ WS :9090
+                    ┌──────────────┴──────────────┐
+                    │                             │
+                    ▼                             ▼
+    ┌───────────────────────┐       ┌───────────────────────┐
+    │  Orin (Jetson)        │       │  CamViewer (Tablet)   │
+    │  🎯 CLIENT #1          │       │  📱 CLIENT #2          │
+    │                       │       │                       │
+    │  Video Consumer:      │       │  Video Consumer:      │
+    │  • WS Client          │       │  • WS Client          │
+    │  • GStreamer Decode   │       │  • MediaCodec Decode  │
+    │  • Publish /recomo/rgb│       │  • Display to User    │
+    │                       │       │                       │
+    │  Target API:          │◄──────┤  Target Selection:    │
+    │  • HTTP Server :8080  │       │  • Bounding Box UI    │
+    │  • Publish /target_roi│       │  • Send to Orin       │
+    └───────────────────────┘       └───────────────────────┘
+                                             │
+                                             │
+                                             ▼
+                                    ┌───────────────┐
+                                    │  Web Browser  │
+                                    │  💻 CLIENT #3  │
+                                    │  • WebCodecs  │
+                                    │  • Controls   │
+                                    └───────────────┘
+
+Key Flows:
+• Video: CamControl → (Orin, CamViewer, Browser) [broadcast]
+• Control: Any Client → CamControl [commands]
+• Target: CamViewer → Orin → ROS2 /target_roi [selection]
 ```
 
-- Browser: Connects to `ws://<host>:9090/control`, decodes video via WebCodecs (Annex‑B→AVCC) with Broadway fallback.
-- Android: Ktor serves the web UI (`/`), WS `/control`, H.264 from MediaCodec; forwards UI commands to Activity; broadcasts telemetry.
-- Orin: Native Python tools receive WS frames and feed GStreamer (`appsrc → h264parse → nvv4l2decoder`). Optional RTSP server and ROS2 publisher.
+- CamControl: **Video source** that broadcasts H.264/H.265 via WebSocket to all clients
+- Orin: **Video client** (receives from CamControl, publishes to ROS2 `/recomo/rgb`) + **Target API server** (receives selections from CamViewer, publishes to ROS2 `/target_roi`)
+- CamViewer: **Video client** (receives from CamControl) + **UI for target selection** (sends to Orin) *(in development)*
+- Browser: **Video client** (receives from CamControl via WebCodecs/Broadway)
 
 ## Software Structure
 ```
-app/                         # Android application module
+app/                         # CamControl - Android camera server
   src/main/java/com/example/camcontrol/
     CamControlService.kt     # Foreground service: WS server, encoder, telemetry relay
     MainActivity.kt          # Camera control pipeline (preview + attach encoder surface)
@@ -30,6 +73,14 @@ app/                         # Android application module
     transport/ControlServer.kt# Ktor server (HTTP + WS /control)
     transport/ControlCommand.kt, Telemetry.kt
   src/main/assets/index.html # Web UI (WebCodecs decode + controls)
+
+camviewer/                   # CamViewer - Android viewer client (IN DEVELOPMENT)
+  src/main/java/com/example/camviewer/
+    MainActivity.kt          # Video viewer with target selection
+    network/                 # WebSocket client, Orin API client
+    video/                   # MediaCodec decoder, renderer
+    selection/               # Bounding box selector, coordinate converter
+    ui/                      # Video display, developer mode, overlays
 
 scripts/                     # Production recording & streaming scripts
   record_on_device.py        # On-device MP4 recording (MediaMuxer)
