@@ -1,0 +1,15 @@
+# Orin Target API Requirements
+# Python dependencies for the target coordinate receiver API
+
+# Web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Data validation
+pydantic>=2.4.0
+
+# HTTP client (for testing)
+httpx>=0.25.0
+
+# Note: ROS2 dependencies are installed via system packages
+# sudo apt install ros-humble-rclpy ros-humble-geometry-msgs

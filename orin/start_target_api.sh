@@ -1,0 +1,62 @@
+#!/bin/bash
+# Quick start script for Orin Target API
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+echo "=================================="
+echo "Orin Target API - Quick Start"
+echo "=================================="
+echo
+
+# Check if virtual environment exists
+if [ ! -d ".venv-target-api" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv .venv-target-api
+    echo "✓ Virtual environment created"
+fi
+
+# Activate virtual environment
+echo "Activating virtual environment..."
+source .venv-target-api/bin/activate
+
+# Install dependencies
+echo "Installing dependencies..."
+pip install -q --upgrade pip
+pip install -q -r requirements-target-api.txt
+echo "✓ Dependencies installed"
+
+# Check if ROS2 is available
+echo
+echo "Checking ROS2 availability..."
+if [ -f "/opt/ros/humble/setup.bash" ]; then
+    echo "✓ ROS2 Humble detected"
+    source /opt/ros/humble/setup.bash
+    ROS2_FLAG="--ros2"
+elif [ -f "/opt/ros/foxy/setup.bash" ]; then
+    echo "✓ ROS2 Foxy detected"
+    source /opt/ros/foxy/setup.bash
+    ROS2_FLAG="--ros2"
+else
+    echo "⚠ ROS2 not found - running in test mode"
+    ROS2_FLAG="--no-ros2"
+fi
+
+echo
+echo "=================================="
+echo "Starting Target API Server"
+echo "=================================="
+echo "Listening on: http://0.0.0.0:8080"
+echo "ROS2 mode: $ROS2_FLAG"
+echo
+echo "Test from CamViewer app or use:"
+echo "  python3 test_target_api.py"
+echo
+echo "Press Ctrl+C to stop"
+echo "=================================="
+echo
+
+# Start the server
+python3 target_api.py $ROS2_FLAG --port 8080
