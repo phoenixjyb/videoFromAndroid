@@ -18,6 +18,7 @@ Options:
 import asyncio
 import logging
 from typing import Optional
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
@@ -41,22 +42,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-
-# FastAPI app
-app = FastAPI(
-    title="Orin Target API",
-    description="Receives target coordinates from CamViewer and publishes to ROS2",
-    version="1.0.0"
-)
-
-# Enable CORS for mobile device access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, specify allowed origins
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # Request/Response models
@@ -141,12 +126,13 @@ ros2_node: Optional[TargetPublisher] = None
 ros2_enabled = False
 
 
-# API Endpoints
-@app.on_event("startup")
-async def startup_event():
-    """Initialize ROS2 on startup if enabled"""
+# Lifespan context manager for startup/shutdown
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage ROS2 lifecycle"""
     global ros2_node, ros2_enabled
     
+    # Startup
     if ros2_enabled and ROS2_AVAILABLE:
         try:
             rclpy.init()
@@ -157,13 +143,10 @@ async def startup_event():
             ros2_enabled = False
     else:
         logger.info("Running in test mode (ROS2 disabled)")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup ROS2 on shutdown"""
-    global ros2_node
     
+    yield
+    
+    # Shutdown
     if ros2_node:
         try:
             ros2_node.destroy_node()
@@ -173,6 +156,24 @@ async def shutdown_event():
             logger.error(f"Error during ROS2 shutdown: {e}")
 
 
+# FastAPI app with lifespan
+app = FastAPI(
+    title="Orin Target API",
+    description="Receives target coordinates from CamViewer and publishes to ROS2",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Enable CORS for mobile device access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify allowed origins
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# API Endpoints
 @app.get("/")
 async def root():
     """Root endpoint - API info"""
