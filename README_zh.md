@@ -82,11 +82,21 @@ DIARY.md / PROJECT_STATUS_SUMMARY.md
   ./quick_start.sh
   ```
   脚本会检测 ADB、建立 `localhost:9100 → device:9090` 转发、source ROS2 环境，并以 10 Hz（HEVC）启动 `ros2_camcontrol.ws_to_image`，输出主题 `/recomo/rgb` 与 `/recomo/camera_info`。
+
+- **性能表现**：节点以 BEST_EFFORT QoS 发布 640×480 RGB8 图像，实测稳定在 **~8.8 Hz**，相比原始 1920×1080 基线（~1.2 Hz）提升 7.3 倍。降采样由硬件加速的 nvvidconv 完成，CPU 开销极低。
+
 - 如需一次性收集 CPU 占用、话题频率、最近日志，可使用诊断脚本：
   ```bash
   ./scripts/stream_diagnostics.sh
   ./scripts/stream_diagnostics.sh --dry-run-publish  # 跳过发布，仅测 pipeline 延迟
   ```
+
+- **图像保存测试**：验证实际吞吐量，使用真实订阅节点保存图像到磁盘：
+  ```bash
+  ./scripts/test_with_subscriber.sh 50         # 保存 50 帧图像并测量频率
+  ```
+  图像保存在时间戳文件夹 `saved_images/run_YYYYMMDD_HHMMSS/`，包含帧计数和统计信息。
+
 - 节点运行期间，可在新终端查看 ROS2 信息：
   ```bash
   source /opt/ros/humble/setup.bash
@@ -94,7 +104,7 @@ DIARY.md / PROJECT_STATUS_SUMMARY.md
   ros2 topic hz /recomo/rgb --window 50
   ros2 topic echo /recomo/rgb --once
   ```
-  默认解码分辨率为 1920×1080，并发布 RGB 图像帧。
+  发布的图像为 640×480 RGB8 格式，话题为 `/recomo/rgb` 及对应的 `/recomo/camera_info`。原始手机流为 1920×1080，在 Orin 上降采样以提高 ROS2 传输效率。
 
 ### Orin — ROS2 图像发布
 - ROS2 Humble：`source /opt/ros/humble/setup.bash`

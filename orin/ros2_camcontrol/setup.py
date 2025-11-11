@@ -19,6 +19,7 @@ setup(
     entry_points={
         'console_scripts': [
             'ws_to_image = ros2_camcontrol.ws_to_image:main',
+            'image_saver = ros2_camcontrol.image_saver:main',
         ],
     },
 )

@@ -12,6 +12,7 @@ from typing import Optional
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image, CameraInfo
 
 import websockets
@@ -47,8 +48,18 @@ class WSH264ToImage(Node):
         self.port = port
         self.url = f"ws://{host}:{port}/control"
         self.frame_id = frame_id
-        self.publisher = self.create_publisher(Image, image_topic, 10)
-        self.camera_info_pub = self.create_publisher(CameraInfo, info_topic, 10)
+        
+        # Use BEST_EFFORT QoS for real-time image streaming
+        # This prevents blocking when there are no subscribers or slow subscribers
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1  # Only keep latest frame
+        )
+        
+        self.publisher = self.create_publisher(Image, image_topic, qos)
+        self.camera_info_pub = self.create_publisher(CameraInfo, info_topic, qos)
         self._camera_info_template = self._load_camera_info(camera_info_path, frame_id)
         self._pts = 0
         self._appsink = None
@@ -83,20 +94,20 @@ class WSH264ToImage(Node):
             hw_decode = (
                 f"{parse} ! queue leaky=downstream max-size-buffers=1 max-size-time=0 max-size-bytes=0 "
                 "! nvv4l2decoder disable-dpb=true enable-max-performance=true "
-                "! nvvidconv ! video/x-raw,format=RGBA "
+                "! nvvidconv ! video/x-raw,width=640,height=480,format=RGBA "
                 "! videoconvert ! video/x-raw,format=RGB"
             )
-            sw_decode = f"{parse} ! avdec_h265 ! videoconvert ! video/x-raw,format=RGB"
+            sw_decode = f"{parse} ! avdec_h265 ! videoscale ! video/x-raw,width=640,height=480 ! videoconvert ! video/x-raw,format=RGB"
         else:
             caps = 'video/x-h264,stream-format=byte-stream,alignment=au'
             parse = 'h264parse config-interval=-1'
             hw_decode = (
                 f"{parse} ! queue leaky=downstream max-size-buffers=1 max-size-time=0 max-size-bytes=0 "
                 "! nvv4l2decoder disable-dpb=true enable-max-performance=true "
-                "! nvvidconv ! video/x-raw,format=RGBA "
+                "! nvvidconv ! video/x-raw,width=640,height=480,format=RGBA "
                 "! videoconvert ! video/x-raw,format=RGB"
             )
-            sw_decode = f"{parse} ! avdec_h264 ! videoconvert ! video/x-raw,format=RGB"
+            sw_decode = f"{parse} ! avdec_h264 ! videoscale ! video/x-raw,width=640,height=480 ! videoconvert ! video/x-raw,format=RGB"
             self._codec = 'h264'
 
         if use_hw and Gst.ElementFactory.find('nvv4l2decoder'):
@@ -251,9 +262,14 @@ class WSH264ToImage(Node):
                 delta_publish_ns = now_monotonic_ns - self._last_pub_monotonic_ns
                 if delta_publish_ns < self._publish_period_ns:
                     return Gst.FlowReturn.OK
+                # Update timestamp after successful throttle check
+                self._last_pub_monotonic_ns = now_monotonic_ns
             elif self._last_pub_monotonic_ns != 0:
                 delta_publish_ns = now_monotonic_ns - self._last_pub_monotonic_ns
-            self._last_pub_monotonic_ns = now_monotonic_ns
+                self._last_pub_monotonic_ns = now_monotonic_ns
+            else:
+                # First frame
+                self._last_pub_monotonic_ns = now_monotonic_ns
 
             sample_index = self._published_count + 1
             if timing_enabled and self._timing_sample_interval > 0:

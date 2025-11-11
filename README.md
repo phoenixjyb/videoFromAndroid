@@ -146,6 +146,15 @@ Note: WebSocket streaming recordings have compressed timestamps (5s recording �
   ./scripts/stream_diagnostics.sh              # runs quick_start, samples ros2 topic hz, tails logs
   ./scripts/stream_diagnostics.sh --dry-run-publish  # skip publishing to measure pipeline latency only
   ```
+
+- **Performance**: The node publishes 640×480 RGB8 images at **~8.8 Hz** sustained rate with BEST_EFFORT QoS, achieving 7.3× improvement over the original 1920×1080 baseline (~1.2 Hz). The downscaling is performed by hardware-accelerated nvvidconv for minimal CPU overhead.
+
+- **Test with image saver**: To verify actual throughput with a real subscriber that saves images to disk:
+  ```bash
+  ./scripts/test_with_subscriber.sh 50         # save 50 images and measure rate
+  ```
+  Images are saved to timestamped folders under `saved_images/run_YYYYMMDD_HHMMSS/` with frame counts and statistics.
+
 - While the node is running you can inspect the ROS graph:
   ```bash
   source /opt/ros/humble/setup.bash
@@ -153,7 +162,7 @@ Note: WebSocket streaming recordings have compressed timestamps (5s recording �
   ros2 topic hz /recomo/rgb --window 50
   ros2 topic echo /recomo/rgb --once
   ```
-  The default stream from the phone is 1920×1080 RGB images published on `/recomo/rgb` with matching `/recomo/camera_info`.
+  The stream is 640×480 RGB8 images published on `/recomo/rgb` with matching `/recomo/camera_info`. Original phone stream is 1920×1080 but downscaled on Orin for efficient ROS2 transport.
 
 ### Orin — ROS2 Image Publisher
 - ROS2 Humble: `source /opt/ros/humble/setup.bash`
