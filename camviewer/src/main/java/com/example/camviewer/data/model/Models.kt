@@ -100,5 +100,6 @@ data class AppSettings(
     val cameraUrl: String = "ws://172.16.30.28:9090",
     val orinTargetUrl: String = "http://172.16.30.234:8080",
     val orinMediaUrl: String = "http://172.16.30.234:8081",
+    val phoneControlHost: String = "172.16.30.28",  // Phone IP for camera control commands
     val developerModeEnabled: Boolean = false
 )

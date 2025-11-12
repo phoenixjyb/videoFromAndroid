@@ -10,6 +10,7 @@ import com.example.camviewer.data.model.Telemetry
 import com.example.camviewer.data.repository.SettingsRepository
 import com.example.camviewer.network.CamControlWebSocketClient
 import com.example.camviewer.network.OrinTargetClient
+import com.example.camviewer.network.PhoneCameraClient
 import com.example.camviewer.video.VideoDecoder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -28,7 +29,8 @@ class VideoViewModel @Inject constructor(
     private val webSocketClient: CamControlWebSocketClient,
     private val videoDecoder: VideoDecoder,
     private val settingsRepository: SettingsRepository,
-    private val orinTargetClient: OrinTargetClient
+    private val orinTargetClient: OrinTargetClient,
+    private val phoneCameraClient: PhoneCameraClient
 ) : ViewModel() {
     
     val connectionState: StateFlow<ConnectionState> = webSocketClient.connectionState
@@ -214,15 +216,14 @@ class VideoViewModel @Inject constructor(
     
     /**
      * Camera control commands (developer mode features)
+     * Send commands to phone's camera via WebSocket
      */
     fun setZoom(value: Float) {
         viewModelScope.launch {
             try {
                 val settings = settingsRepository.settings.first()
-                val host = settings.orinTargetUrl.substringBefore(":")
-                // Send zoom command to Orin via WebSocket
-                Log.d(TAG, "Setting zoom: $value")
-                // TODO: Implement WebSocket command sending
+                Log.d(TAG, "Setting zoom to $value on phone ${settings.phoneControlHost}")
+                phoneCameraClient.setZoom(settings.phoneControlHost, value)
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting zoom", e)
             }
@@ -232,8 +233,9 @@ class VideoViewModel @Inject constructor(
     fun setAeLock(enabled: Boolean) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Setting AE lock: $enabled")
-                // TODO: Implement WebSocket command sending
+                val settings = settingsRepository.settings.first()
+                Log.d(TAG, "Setting AE lock to $enabled on phone ${settings.phoneControlHost}")
+                phoneCameraClient.setAeLock(settings.phoneControlHost, enabled)
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting AE lock", e)
             }
@@ -243,8 +245,9 @@ class VideoViewModel @Inject constructor(
     fun setAwbLock(enabled: Boolean) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Setting AWB lock: $enabled")
-                // TODO: Implement WebSocket command sending
+                val settings = settingsRepository.settings.first()
+                Log.d(TAG, "Setting AWB lock to $enabled on phone ${settings.phoneControlHost}")
+                phoneCameraClient.setAwbLock(settings.phoneControlHost, enabled)
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting AWB lock", e)
             }
@@ -254,8 +257,9 @@ class VideoViewModel @Inject constructor(
     fun switchCamera(facing: String) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Switching camera: $facing")
-                // TODO: Implement WebSocket command sending
+                val settings = settingsRepository.settings.first()
+                Log.d(TAG, "Switching camera to $facing on phone ${settings.phoneControlHost}")
+                phoneCameraClient.switchCamera(settings.phoneControlHost, facing)
             } catch (e: Exception) {
                 Log.e(TAG, "Error switching camera", e)
             }
@@ -265,8 +269,9 @@ class VideoViewModel @Inject constructor(
     fun setBitrate(bitrate: Int) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Setting bitrate: ${bitrate / 1000000}Mbps")
-                // TODO: Implement WebSocket command sending
+                val settings = settingsRepository.settings.first()
+                Log.d(TAG, "Setting bitrate to ${bitrate / 1000000}Mbps on phone ${settings.phoneControlHost}")
+                phoneCameraClient.setBitrate(settings.phoneControlHost, bitrate)
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting bitrate", e)
             }
@@ -276,8 +281,9 @@ class VideoViewModel @Inject constructor(
     fun setCodec(codec: String) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Setting codec: $codec")
-                // TODO: Implement WebSocket command sending
+                val settings = settingsRepository.settings.first()
+                Log.d(TAG, "Setting codec to $codec on phone ${settings.phoneControlHost}")
+                phoneCameraClient.setCodec(settings.phoneControlHost, codec)
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting codec", e)
             }

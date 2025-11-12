@@ -1,5 +1,6 @@
 package com.example.camviewer.di
 
+import com.example.camviewer.network.PhoneCameraClient
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -85,4 +86,11 @@ object NetworkModule {
             connectTimeoutMillis = 10_000
         }
     }
+    
+    @Provides
+    @Singleton
+    fun providePhoneCameraClient(
+        @KtorWebSocketClient httpClient: HttpClient,
+        json: Json
+    ): PhoneCameraClient = PhoneCameraClient(httpClient, json)
 }

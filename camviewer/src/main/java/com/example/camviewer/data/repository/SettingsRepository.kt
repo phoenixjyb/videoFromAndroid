@@ -19,6 +19,7 @@ class SettingsRepository @Inject constructor(
         val CAMERA_URL = stringPreferencesKey("camera_url")
         val ORIN_TARGET_URL = stringPreferencesKey("orin_target_url")
         val ORIN_MEDIA_URL = stringPreferencesKey("orin_media_url")
+        val PHONE_CONTROL_HOST = stringPreferencesKey("phone_control_host")
         val DEVELOPER_MODE = booleanPreferencesKey("developer_mode")
     }
     
@@ -27,6 +28,7 @@ class SettingsRepository @Inject constructor(
             cameraUrl = preferences[PreferencesKeys.CAMERA_URL] ?: "ws://172.16.30.28:9090",
             orinTargetUrl = preferences[PreferencesKeys.ORIN_TARGET_URL] ?: "http://172.16.30.234:8080",
             orinMediaUrl = preferences[PreferencesKeys.ORIN_MEDIA_URL] ?: "http://172.16.30.234:8081",
+            phoneControlHost = preferences[PreferencesKeys.PHONE_CONTROL_HOST] ?: "172.16.30.28",
             developerModeEnabled = preferences[PreferencesKeys.DEVELOPER_MODE] ?: false
         )
     }
@@ -36,6 +38,7 @@ class SettingsRepository @Inject constructor(
             preferences[PreferencesKeys.CAMERA_URL] = settings.cameraUrl
             preferences[PreferencesKeys.ORIN_TARGET_URL] = settings.orinTargetUrl
             preferences[PreferencesKeys.ORIN_MEDIA_URL] = settings.orinMediaUrl
+            preferences[PreferencesKeys.PHONE_CONTROL_HOST] = settings.phoneControlHost
             preferences[PreferencesKeys.DEVELOPER_MODE] = settings.developerModeEnabled
         }
     }
