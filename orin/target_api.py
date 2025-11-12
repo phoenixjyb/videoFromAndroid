@@ -82,10 +82,11 @@ class TargetPublisher(Node):
         self.publisher_ = self.create_publisher(RegionOfInterest, '/target_roi', 10)
         
         # Subscribe to camera_info to get current video resolution
+        # Use RELIABLE QoS to ensure we get the camera_info messages
         camera_info_qos = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
-            depth=1
+            depth=10
         )
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
@@ -93,6 +94,7 @@ class TargetPublisher(Node):
             self._camera_info_callback,
             camera_info_qos
         )
+        self.get_logger().info('Subscribed to /recomo/camera_info')
         
         # Subscribe to telemetry for debugging (optional)
         self.telemetry_sub = self.create_subscription(
@@ -114,11 +116,15 @@ class TargetPublisher(Node):
         width = msg.width
         height = msg.height
         
+        self.get_logger().info(f'Camera info received: {width}x{height}')
+        
         if width > 0 and height > 0:
             if self.video_width != width or self.video_height != height:
                 self.get_logger().info(f'Video resolution updated from camera_info: {width}x{height}')
             self.video_width = width
             self.video_height = height
+        else:
+            self.get_logger().warn(f'Invalid camera_info dimensions: {width}x{height}')
     
     def _telemetry_callback(self, msg: 'String'):
         """Extract video resolution from telemetry"""
