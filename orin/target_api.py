@@ -81,7 +81,7 @@ class TargetPublisher(Node):
         super().__init__('target_publisher')
         self.publisher_ = self.create_publisher(RegionOfInterest, '/target_roi', 10)
         
-        # Subscribe to camera_info to get current video resolution
+        # Subscribe to camera_info to get current video resolution (source)
         # Use sensor_data QoS profile (BEST_EFFORT) to match publisher
         from rclpy.qos import qos_profile_sensor_data
         
@@ -92,6 +92,15 @@ class TargetPublisher(Node):
             qos_profile_sensor_data
         )
         self.get_logger().info('Subscribed to /recomo/camera_info with sensor_data QoS profile')
+        
+        # Subscribe to downstream RGB camera_info to get target resolution
+        self.rgb_camera_info_sub = self.create_subscription(
+            CameraInfo,
+            '/recomo/rgb/camera_info',
+            self._rgb_camera_info_callback,
+            qos_profile_sensor_data
+        )
+        self.get_logger().info('Subscribed to /recomo/rgb/camera_info for target resolution')
         
         # Subscribe to telemetry for debugging (optional)
         telemetry_qos = QoSProfile(
@@ -106,27 +115,45 @@ class TargetPublisher(Node):
             telemetry_qos
         )
         
-        # Default to 1080p until we get camera_info
+        # Default to 1080p until we get camera_info (source)
         self.video_width = 1920
         self.video_height = 1080
         
-        self.get_logger().info(f'Target ROI publisher node initialized (default resolution: {self.video_width}x{self.video_height})')
-        self.get_logger().info('Waiting for camera_info to get actual video resolution...')
+        # Target resolution for downstream consumers (from /recomo/rgb)
+        # Default to VGA until we get actual resolution
+        self.target_width = 640
+        self.target_height = 480
+        
+        self.get_logger().info(f'Target ROI publisher node initialized')
+        self.get_logger().info(f'  Source resolution (default): {self.video_width}x{self.video_height}')
+        self.get_logger().info(f'  Target resolution (default): {self.target_width}x{self.target_height}')
+        self.get_logger().info('Waiting for camera_info topics...')
     
     def _camera_info_callback(self, msg: 'CameraInfo'):
-        """Extract video resolution from camera_info"""
+        """Extract source video resolution from camera_info"""
         width = msg.width
         height = msg.height
         
-        self.get_logger().info(f'Camera info received: {width}x{height}')
-        
         if width > 0 and height > 0:
             if self.video_width != width or self.video_height != height:
-                self.get_logger().info(f'Video resolution updated from camera_info: {width}x{height}')
+                self.get_logger().info(f'Source video resolution updated: {width}x{height}')
             self.video_width = width
             self.video_height = height
         else:
             self.get_logger().warn(f'Invalid camera_info dimensions: {width}x{height}')
+    
+    def _rgb_camera_info_callback(self, msg: 'CameraInfo'):
+        """Extract target resolution from /recomo/rgb/camera_info"""
+        width = msg.width
+        height = msg.height
+        
+        if width > 0 and height > 0:
+            if self.target_width != width or self.target_height != height:
+                self.get_logger().info(f'Target resolution updated from /recomo/rgb: {width}x{height}')
+            self.target_width = width
+            self.target_height = height
+        else:
+            self.get_logger().warn(f'Invalid RGB camera_info dimensions: {width}x{height}')
     
     def _telemetry_callback(self, msg: 'String'):
         """Extract video resolution from telemetry"""
@@ -156,32 +183,32 @@ class TargetPublisher(Node):
             y: Center y coordinate or bounding box y_offset (normalized 0.0-1.0)
             width: Bounding box width (normalized, optional)
             height: Bounding box height (normalized, optional)
+        
+        The ROI coordinates are published in the target resolution (640x480)
+        for downstream vision processing, regardless of source video resolution.
         """
         msg = RegionOfInterest()
         
-        # Convert normalized coordinates (0.0-1.0) to pixel coordinates
-        # using current video resolution from telemetry
-        video_width = self.video_width
-        video_height = self.video_height
-        
-        self.get_logger().info(f'Using resolution: {video_width}x{video_height} (from camera_info)')
+        # Use target resolution for downstream consumers
+        target_width = self.target_width
+        target_height = self.target_height
         
         # x_offset and y_offset represent the top-left corner of the ROI
         # For a simple tap point, use small default box around the point
         if width is None or height is None:
             # Default: 10% box centered on tap point
-            msg.x_offset = int((x - 0.05) * video_width)
-            msg.y_offset = int((y - 0.05) * video_height)
-            msg.width = int(0.1 * video_width)  # 10% default width
-            msg.height = int(0.1 * video_height)  # 10% default height
+            msg.x_offset = int((x - 0.05) * target_width)
+            msg.y_offset = int((y - 0.05) * target_height)
+            msg.width = int(0.1 * target_width)  # 10% default width
+            msg.height = int(0.1 * target_height)  # 10% default height
         else:
             # Use provided bounding box (assume x,y is top-left corner)
-            msg.x_offset = int(x * video_width)
-            msg.y_offset = int(y * video_height)
-            msg.width = int(width * video_width)
-            msg.height = int(height * video_height)
+            msg.x_offset = int(x * target_width)
+            msg.y_offset = int(y * target_height)
+            msg.width = int(width * target_width)
+            msg.height = int(height * target_height)
         
-        msg.do_rectify = False  # Not using image rectification
+        msg.do_rectify = True  # Enable rectification flag for downstream
         
         self.publisher_.publish(msg)
         
@@ -189,12 +216,12 @@ class TargetPublisher(Node):
             self.get_logger().info(
                 f'Published ROI: normalized({x:.3f}, {y:.3f}, {width:.3f}x{height:.3f}) '
                 f'→ pixels({msg.x_offset}, {msg.y_offset}, {msg.width}x{msg.height}) '
-                f'[resolution: {video_width}x{video_height}]'
+                f'[target resolution: {target_width}x{target_height}]'
             )
         else:
             self.get_logger().info(
                 f'Published target point: ({x:.4f}, {y:.4f}) with default 10% box '
-                f'[resolution: {video_width}x{video_height}]'
+                f'[target resolution: {target_width}x{target_height}]'
             )
 
 
