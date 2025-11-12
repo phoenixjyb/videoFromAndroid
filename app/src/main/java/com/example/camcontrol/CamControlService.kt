@@ -314,6 +314,15 @@ class CamControlService : Service() {
                             return@ControlServer
                         }
                         currentCodec = mapped
+                        
+                        // Notify MainActivity of codec change
+                        val codecIntent = Intent("com.example.camcontrol.CAMERA_COMMAND").apply {
+                            setPackage(packageName)
+                            putExtra("command", "setCodec")
+                            putExtra("codec", currentCodec)
+                        }
+                        sendBroadcast(codecIntent)
+                        
                         serviceScope.launch(Dispatchers.IO) {
                             encoderMutex.withLock {
                                 try {

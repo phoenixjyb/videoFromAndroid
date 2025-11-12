@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -164,7 +165,15 @@ fun MediaCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f),
+            .aspectRatio(1f)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        android.util.Log.d("MediaScreen", "Card tapped: ${mediaItem.filename}, downloaded: $isDownloaded")
+                        onClick()
+                    }
+                )
+            },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -456,85 +465,84 @@ fun VideoPlayerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             dismissOnBackPress = true,
-            dismissOnClickOutside = true,
-            usePlatformDefaultWidth = false
+            dismissOnClickOutside = false,  // Prevent accidental dismissal
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false  // Allow fullscreen
         )
     ) {
-        Surface(
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.8f),
-            shape = RoundedCornerShape(16.dp),
-            color = Color.Black
+                .fillMaxSize()
+                .background(Color.Black)
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Title bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.8f))
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = mediaItem.filename,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = Color.White
-                        )
-                    }
-                }
-                
-                // Video player
-                if (videoFile != null && videoFile.exists()) {
-                    AndroidView(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        factory = { context ->
-                            VideoView(context).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                setVideoURI(Uri.fromFile(videoFile))
-                                
-                                // Add media controller (play/pause/seek controls)
-                                val mediaController = MediaController(context)
-                                mediaController.setAnchorView(this)
-                                setMediaController(mediaController)
-                                
-                                // Auto-start playback
-                                setOnPreparedListener { player ->
-                                    player.start()
-                                }
+            // Video player - fills entire screen
+            if (videoFile != null && videoFile.exists()) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { context ->
+                        VideoView(context).apply {
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            setVideoURI(Uri.fromFile(videoFile))
+                            
+                            // Add media controller (play/pause/seek controls)
+                            val mediaController = MediaController(context)
+                            mediaController.setAnchorView(this)
+                            setMediaController(mediaController)
+                            
+                            // Auto-start playback
+                            setOnPreparedListener { player ->
+                                player.start()
                             }
                         }
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Video file not found",
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
                     }
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Video file not found",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+            
+            // Transparent title bar overlay
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopStart)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.7f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = mediaItem.filename,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.White
+                    )
                 }
             }
         }

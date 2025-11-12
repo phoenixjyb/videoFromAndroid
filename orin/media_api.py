@@ -288,12 +288,13 @@ async def download_media(media_id: str):
 async def get_thumbnail(media_id: str):
     """
     Get thumbnail for a media item
-    Currently returns a placeholder since ffmpeg is not used
-    TODO: Generate thumbnails using ffmpeg
+    Generates thumbnail using ffmpeg if not cached
     """
     result = get_media_by_id(media_id)
     if not result:
         raise HTTPException(status_code=404, detail="Media not found")
+    
+    media_item, filepath = result
     
     # Check if thumbnail exists in cache
     thumbnail_path = THUMBNAIL_CACHE_DIR / f"{media_id}.jpg"
@@ -301,8 +302,29 @@ async def get_thumbnail(media_id: str):
     if thumbnail_path.exists():
         return FileResponse(path=thumbnail_path, media_type="image/jpeg")
     
-    # TODO: Generate thumbnail using ffmpeg if not cached
-    # For now, return 404 to indicate no thumbnail available
+    # Generate thumbnail using ffmpeg
+    if media_item.type == "VIDEO":
+        try:
+            import subprocess
+            # Extract frame at 1 second into the video
+            cmd = [
+                'ffmpeg',
+                '-i', str(filepath),
+                '-ss', '00:00:01',  # Seek to 1 second
+                '-vframes', '1',     # Extract 1 frame
+                '-vf', 'scale=320:-1',  # Scale to width 320, maintain aspect ratio
+                '-y',                # Overwrite output
+                str(thumbnail_path)
+            ]
+            result = subprocess.run(cmd, capture_output=True, timeout=10)
+            if result.returncode == 0 and thumbnail_path.exists():
+                return FileResponse(path=thumbnail_path, media_type="image/jpeg")
+            else:
+                print(f"ffmpeg failed: {result.stderr.decode()}")
+        except Exception as e:
+            print(f"Thumbnail generation error: {e}")
+    
+    # If generation failed or it's an image, return 404
     raise HTTPException(status_code=404, detail="Thumbnail not available")
 
 

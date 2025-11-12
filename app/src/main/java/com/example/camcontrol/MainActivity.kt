@@ -52,6 +52,9 @@ class MainActivity : AppCompatActivity() {
     private val json = Json { classDiscriminator = "cmd"; ignoreUnknownKeys = true }
     private var currentProfile = VideoProfile(1920, 1080, 30, highSpeed = false)
     private val defaultProfile = VideoProfile(1920, 1080, 30, highSpeed = false)
+    private var currentCodec = "h265"  // Track current codec (default to h265)
+    private var currentBitrate = 0     // Track current bitrate
+    private var frameCounter = 0       // Track frame count
 
     private var cameraThread: HandlerThread? = null
     private var cameraHandler: Handler? = null
@@ -117,6 +120,11 @@ class MainActivity : AppCompatActivity() {
                                 Log.e("MainActivity", "Error applying video profile", e)
                             }
                         }
+                    }
+                    "setCodec" -> {
+                        val codec = intent.getStringExtra("codec") ?: "h264"
+                        currentCodec = codec.lowercase()
+                        Log.d("MainActivity", "🎬 Codec changed to: $currentCodec")
                     }
                 }
             } else if (intent?.action == "com.example.camcontrol.ENCODER_SURFACE") {
@@ -250,8 +258,20 @@ class MainActivity : AppCompatActivity() {
 
         cameraController = Camera2Controller(this, cameraHandler!!) { telemetry: Telemetry ->
             // Forward telemetry to service for WebSocket broadcast
+            // Enhance with encoder information
             try {
-                val payload = json.encodeToString(telemetry)
+                frameCounter++
+                val enhancedTelemetry = telemetry.copy(
+                    frameNumber = frameCounter,
+                    timestampMs = System.currentTimeMillis(),
+                    bitrateKbps = currentBitrate / 1000,  // Convert to kbps
+                    codec = currentCodec,
+                    resolution = com.example.camcontrol.transport.Resolution(
+                        width = currentProfile.width,
+                        height = currentProfile.height
+                    )
+                )
+                val payload = json.encodeToString(enhancedTelemetry)
                 val intent = Intent("com.example.camcontrol.TELEMETRY").apply {
                     setPackage(packageName)
                     putExtra("payload", payload)
@@ -294,6 +314,10 @@ class MainActivity : AppCompatActivity() {
     private suspend fun startPipeline(profile: VideoProfile) {
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             Log.i("MainActivity", "🎬 Starting pipeline: ${profile.width}x${profile.height}@${profile.fps}")
+
+            // Update encoder info for telemetry
+            currentBitrate = estimateBitrate(profile)
+            frameCounter = 0
 
             // Validate surface before proceeding
             val surface = binding.previewView.holder.surface
