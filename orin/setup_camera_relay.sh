@@ -24,20 +24,8 @@ fi
 PYTHON_VERSION=$(python3 --version)
 echo "✅ $PYTHON_VERSION"
 
-# Setup or activate virtual environment
-echo ""
-echo "🐍 Setting up Python virtual environment..."
-if [ ! -d ".venv" ]; then
-    echo "Creating new virtual environment..."
-    python3 -m venv .venv
-    echo "✅ Virtual environment created"
-else
-    echo "✅ Virtual environment already exists"
-fi
-
-# Activate virtual environment
-source .venv/bin/activate
-echo "✅ Virtual environment activated"
+# Note: Using pip --user approach (no virtual environment)
+# This matches the approach used in other scripts (start_target_api.sh, start_media_api.sh)
 
 # Check ROS2
 echo ""
@@ -61,7 +49,7 @@ fi
 # Install Python dependencies
 echo ""
 echo "📦 Installing Python dependencies..."
-pip install -r requirements.txt
+pip install --user -r requirements.txt
 echo "✅ Dependencies installed (including websockets>=12.0)"
 
 # Check phone connectivity
@@ -92,11 +80,7 @@ echo ""
 echo "✅ Setup complete!"
 echo ""
 echo "To start the camera control relay:"
-echo "  1. Activate virtual environment: source .venv/bin/activate"
-echo "  2. Run relay: python3 camera_control_relay.py --phone-host $PHONE_IP"
-echo ""
-echo "Or use the combined command:"
-echo "  source .venv/bin/activate && python3 camera_control_relay.py --phone-host $PHONE_IP"
+echo "  python3 camera_control_relay.py --phone-host $PHONE_IP"
 echo ""
 echo "To test camera control:"
 echo "  ros2 topic pub --once /camera/zoom std_msgs/Float32 \"data: 2.5\""
