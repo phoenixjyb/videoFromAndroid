@@ -49,8 +49,10 @@ app.add_middleware(
 )
 
 # Configuration
-MEDIA_DIR = Path("saved_videos")
-THUMBNAIL_CACHE_DIR = Path("saved_videos/.thumbnails")
+# Use absolute path to project root's saved_videos directory
+PROJECT_ROOT = Path(__file__).parent.parent
+MEDIA_DIR = PROJECT_ROOT / "saved_videos"
+THUMBNAIL_CACHE_DIR = MEDIA_DIR / ".thumbnails"
 BASE_URL = "http://172.16.30.234:8081"  # Orin IP
 
 # Ensure directories exist
@@ -63,7 +65,7 @@ class MediaItem:
     """Represents a media file"""
     id: str
     filename: str
-    type: str  # "video" or "image"
+    type: str  # "VIDEO" or "IMAGE" (uppercase to match Android enum)
     timestamp: int  # Unix timestamp in milliseconds
     size: int  # File size in bytes
     resolution: Optional[dict] = None  # {"width": 1920, "height": 1080}
@@ -155,7 +157,7 @@ def scan_media_files() -> List[MediaItem]:
         media_item = MediaItem(
             id=file_id,
             filename=filepath.name,
-            type="video",
+            type="VIDEO",  # Use uppercase to match Android MediaType enum
             timestamp=metadata.get('timestamp', int(file_stat.st_mtime * 1000)),
             size=file_stat.st_size,
             resolution=metadata.get('resolution'),

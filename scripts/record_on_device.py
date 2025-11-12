@@ -274,8 +274,8 @@ if __name__ == '__main__':
     # Connection settings
     parser.add_argument('-H', '--host', default='localhost',
                         help='WebSocket host (default: localhost)')
-    parser.add_argument('-p', '--port', type=int, default=9090,
-                        help='WebSocket port (default: 9090)')
+    parser.add_argument('-p', '--port', type=int, default=9091,
+                        help='WebSocket port (default: 9091)')
     
     # Recording settings
     parser.add_argument('-d', '--duration', type=float, default=5.0,
