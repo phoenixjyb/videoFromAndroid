@@ -11,21 +11,10 @@ echo "Orin Target API - Quick Start"
 echo "=================================="
 echo
 
-# Check if virtual environment exists
-if [ ! -d ".venv-target-api" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv .venv-target-api
-    echo "✓ Virtual environment created"
-fi
-
-# Activate virtual environment
-echo "Activating virtual environment..."
-source .venv-target-api/bin/activate
-
-# Install dependencies
-echo "Installing dependencies..."
-pip install -q --upgrade pip
-pip install -q -r requirements-target-api.txt
+# Install dependencies if needed
+echo "Installing/updating dependencies..."
+python3 -m pip install --user -q --upgrade pip
+python3 -m pip install --user -q -r requirements.txt
 echo "✓ Dependencies installed"
 
 # Check if ROS2 is available

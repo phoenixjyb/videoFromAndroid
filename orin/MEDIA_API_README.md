@@ -16,7 +16,7 @@ Media files are stored in `saved_videos/` directory.
 
 ```bash
 # Install Python dependencies
-pip install -r orin/requirements-media-api.txt
+pip install -r orin/requirements.txt
 ```
 
 ## Usage

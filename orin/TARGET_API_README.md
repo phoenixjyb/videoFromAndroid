@@ -12,19 +12,13 @@ The Target API allows the CamViewer app to send tap coordinates to the Orin devi
 
 ## Quick Start
 
-### 1. Install Dependencies
+### Install Dependencies
 
 ```bash
 cd /home/nvidia/videoFromAndroid/orin
 
-# Create virtual environment
-python3 -m venv .venv-target-api
-source .venv-target-api/bin/activate
-
-# Install requirements
-pip install -r requirements-target-api.txt
-```
-
+# Install Python dependencies
+pip install --user -r requirements.txt
 ### 2. Start the Server
 
 **Easy way (auto-detects ROS2):**

@@ -16,6 +16,7 @@ captures/
 
 # Python venv and caches
 /.venv/
+/orin/.venv/
 /.venv-target-api/
 __pycache__/
 *.pyc
