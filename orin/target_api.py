@@ -164,6 +164,8 @@ class TargetPublisher(Node):
         video_width = self.video_width
         video_height = self.video_height
         
+        self.get_logger().info(f'Using resolution: {video_width}x{video_height} (from camera_info)')
+        
         # x_offset and y_offset represent the top-left corner of the ROI
         # For a simple tap point, use small default box around the point
         if width is None or height is None:
