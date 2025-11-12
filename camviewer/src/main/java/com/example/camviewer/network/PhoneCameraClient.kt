@@ -35,7 +35,7 @@ class PhoneCameraClient(
             httpClient.webSocket(
                 host = phoneHost,
                 port = 8080,
-                path = "/"
+                path = "/control"
             ) {
                 // Send the command as text frame
                 send(Frame.Text(jsonCommand))

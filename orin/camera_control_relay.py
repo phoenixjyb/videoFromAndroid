@@ -51,7 +51,7 @@ class CameraControlRelay(Node):
         
         self.phone_host = phone_host
         self.phone_port = phone_port
-        self.ws_uri = f'ws://{phone_host}:{phone_port}/'
+        self.ws_uri = f'ws://{phone_host}:{phone_port}/control'
         
         self.get_logger().info(f'Camera Control Relay initialized')
         self.get_logger().info(f'Phone WebSocket: {self.ws_uri}')
