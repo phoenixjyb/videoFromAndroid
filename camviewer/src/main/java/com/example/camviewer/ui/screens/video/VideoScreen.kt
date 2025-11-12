@@ -39,6 +39,7 @@ fun VideoScreen(
     val connectionState by viewModel.connectionState.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
     val latency by viewModel.latency.collectAsState()
+    val developerModeEnabled by viewModel.developerModeEnabled.collectAsState(initial = false)
     val scope = rememberCoroutineScope()
     
     var videoSurfaceView by remember { mutableStateOf<VideoSurfaceView?>(null) }
@@ -191,6 +192,20 @@ fun VideoScreen(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(8.dp)
+        )
+        
+        // Developer mode camera controls overlay (bottom)
+        CameraControlOverlay(
+            isVisible = developerModeEnabled,
+            onZoomChange = { viewModel.setZoom(it) },
+            onAeLockChange = { viewModel.setAeLock(it) },
+            onAwbLockChange = { viewModel.setAwbLock(it) },
+            onCameraSwitch = { viewModel.switchCamera(it) },
+            onBitrateChange = { viewModel.setBitrate(it) },
+            onCodecChange = { viewModel.setCodec(it) },
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth(0.85f)  // Leave 15% space on the right
         )
     }
 }

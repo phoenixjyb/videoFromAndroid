@@ -207,6 +207,84 @@ class VideoViewModel @Inject constructor(
     }
     
     /**
+     * Developer mode state from settings
+     */
+    val developerModeEnabled: Flow<Boolean> = settingsRepository.settings
+        .map { it.developerModeEnabled }
+    
+    /**
+     * Camera control commands (developer mode features)
+     */
+    fun setZoom(value: Float) {
+        viewModelScope.launch {
+            try {
+                val settings = settingsRepository.settings.first()
+                val host = settings.orinTargetUrl.substringBefore(":")
+                // Send zoom command to Orin via WebSocket
+                Log.d(TAG, "Setting zoom: $value")
+                // TODO: Implement WebSocket command sending
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting zoom", e)
+            }
+        }
+    }
+    
+    fun setAeLock(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Setting AE lock: $enabled")
+                // TODO: Implement WebSocket command sending
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting AE lock", e)
+            }
+        }
+    }
+    
+    fun setAwbLock(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Setting AWB lock: $enabled")
+                // TODO: Implement WebSocket command sending
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting AWB lock", e)
+            }
+        }
+    }
+    
+    fun switchCamera(facing: String) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Switching camera: $facing")
+                // TODO: Implement WebSocket command sending
+            } catch (e: Exception) {
+                Log.e(TAG, "Error switching camera", e)
+            }
+        }
+    }
+    
+    fun setBitrate(bitrate: Int) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Setting bitrate: ${bitrate / 1000000}Mbps")
+                // TODO: Implement WebSocket command sending
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting bitrate", e)
+            }
+        }
+    }
+    
+    fun setCodec(codec: String) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Setting codec: $codec")
+                // TODO: Implement WebSocket command sending
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting codec", e)
+            }
+        }
+    }
+    
+    /**
      * Release resources
      */
     override fun onCleared() {
