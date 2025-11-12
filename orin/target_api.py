@@ -29,7 +29,7 @@ import argparse
 try:
     import rclpy
     from rclpy.node import Node
-    from sensor_msgs.msg import RegionOfInterest
+    from sensor_msgs.msg import RegionOfInterest, CameraInfo
     from std_msgs.msg import String
     from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
     import json
@@ -81,29 +81,51 @@ class TargetPublisher(Node):
         super().__init__('target_publisher')
         self.publisher_ = self.create_publisher(RegionOfInterest, '/target_roi', 10)
         
-        # Subscribe to telemetry to get current video resolution
-        telemetry_qos = QoSProfile(
+        # Subscribe to camera_info to get current video resolution
+        camera_info_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=1
         )
+        self.camera_info_sub = self.create_subscription(
+            CameraInfo,
+            '/recomo/camera_info',
+            self._camera_info_callback,
+            camera_info_qos
+        )
+        
+        # Subscribe to telemetry for debugging (optional)
         self.telemetry_sub = self.create_subscription(
             String,
             '/recomo/rgb/telemetry',
             self._telemetry_callback,
-            telemetry_qos
+            camera_info_qos
         )
         
-        # Default to 1080p until we get telemetry
+        # Default to 1080p until we get camera_info
         self.video_width = 1920
         self.video_height = 1080
         
-        self.get_logger().info('Target ROI publisher node initialized')
+        self.get_logger().info(f'Target ROI publisher node initialized (default resolution: {self.video_width}x{self.video_height})')
+        self.get_logger().info('Waiting for camera_info to get actual video resolution...')
+    
+    def _camera_info_callback(self, msg: 'CameraInfo'):
+        """Extract video resolution from camera_info"""
+        width = msg.width
+        height = msg.height
+        
+        if width > 0 and height > 0:
+            if self.video_width != width or self.video_height != height:
+                self.get_logger().info(f'Video resolution updated from camera_info: {width}x{height}')
+            self.video_width = width
+            self.video_height = height
     
     def _telemetry_callback(self, msg: 'String'):
         """Extract video resolution from telemetry"""
         try:
             data = json.loads(msg.data)
+            self.get_logger().debug(f'Received telemetry: {data}')
+            
             if 'resolution' in data and data['resolution']:
                 width = data['resolution'].get('width')
                 height = data['resolution'].get('height')
@@ -112,8 +134,10 @@ class TargetPublisher(Node):
                         self.get_logger().info(f'Video resolution updated: {width}x{height}')
                     self.video_width = width
                     self.video_height = height
+            else:
+                self.get_logger().warn(f'Telemetry missing resolution field. Keys: {list(data.keys())}')
         except Exception as e:
-            self.get_logger().warn(f'Failed to parse telemetry: {e}')
+            self.get_logger().warn(f'Failed to parse telemetry: {e}, data: {msg.data[:200]}')
     
     def publish_target(self, x: float, y: float, width: Optional[float] = None, height: Optional[float] = None):
         """
