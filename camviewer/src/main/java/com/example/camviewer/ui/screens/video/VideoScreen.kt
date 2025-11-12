@@ -2,7 +2,6 @@ package com.example.camviewer.ui.screens.video
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
@@ -13,8 +12,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -23,6 +28,9 @@ import com.example.camviewer.data.model.ConnectionState
 import com.example.camviewer.video.VideoSurfaceView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 @Composable
 fun VideoScreen(
@@ -35,6 +43,22 @@ fun VideoScreen(
     
     var videoSurfaceView by remember { mutableStateOf<VideoSurfaceView?>(null) }
     var tapPosition by remember { mutableStateOf<Offset?>(null) }
+    var dragStartPosition by remember { mutableStateOf<Offset?>(null) }
+    var dragCurrentPosition by remember { mutableStateOf<Offset?>(null) }
+    
+    // Calculate bounding box from drag positions
+    val boundingBox = remember(dragStartPosition, dragCurrentPosition) {
+        if (dragStartPosition != null && dragCurrentPosition != null) {
+            val start = dragStartPosition!!
+            val current = dragCurrentPosition!!
+            Rect(
+                left = min(start.x, current.x),
+                top = min(start.y, current.y),
+                right = max(start.x, current.x),
+                bottom = max(start.y, current.y)
+            )
+        } else null
+    }
     
     Box(modifier = Modifier.fillMaxSize()) {
         // Video Surface
@@ -59,20 +83,82 @@ fun VideoScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
-                    detectTapGestures { offset ->
-                        // Convert tap to normalized coordinates (0.0-1.0)
-                        val normalizedX = offset.x / size.width
-                        val normalizedY = offset.y / size.height
+                    awaitEachGesture {
+                        // Wait for first touch down
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val downPosition = down.position
+                        var totalDrag = 0f
+                        var isDragging = false
                         
-                        tapPosition = offset
+                        // Track movement
+                        do {
+                            val event = awaitPointerEvent()
+                            val dragChange = event.changes.firstOrNull()
+                            
+                            if (dragChange != null) {
+                                val dragAmount = dragChange.position - downPosition
+                                totalDrag = kotlin.math.sqrt(
+                                    dragAmount.x * dragAmount.x + dragAmount.y * dragAmount.y
+                                )
+                                
+                                // If moved more than 10 pixels, it's a drag
+                                if (totalDrag > 10f && !isDragging) {
+                                    isDragging = true
+                                    // Clear tap position
+                                    tapPosition = null
+                                    // Start drag
+                                    dragStartPosition = downPosition
+                                }
+                                
+                                if (isDragging) {
+                                    dragCurrentPosition = dragChange.position
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
                         
-                        // Send target coordinates
-                        viewModel.sendTargetCoordinates(normalizedX, normalizedY)
-                        
-                        // Clear tap indicator after delay
-                        scope.launch {
-                            delay(1000)
-                            tapPosition = null
+                        // Pointer released
+                        if (isDragging) {
+                            // Send bounding box
+                            val start = dragStartPosition
+                            val end = dragCurrentPosition
+                            
+                            if (start != null && end != null) {
+                                // Calculate normalized bounding box (0.0-1.0)
+                                val left = min(start.x, end.x) / size.width
+                                val top = min(start.y, end.y) / size.height
+                                val right = max(start.x, end.x) / size.width
+                                val bottom = max(start.y, end.y) / size.height
+                                
+                                val width = right - left
+                                val height = bottom - top
+                                
+                                // Only send if box has meaningful size (> 1% of screen)
+                                if (width > 0.01f && height > 0.01f) {
+                                    viewModel.sendTargetROI(left, top, width, height)
+                                }
+                            }
+                            
+                            // Clear drag state after delay
+                            scope.launch {
+                                delay(1000)
+                                dragStartPosition = null
+                                dragCurrentPosition = null
+                            }
+                        } else {
+                            // It was a tap
+                            val normalizedX = downPosition.x / size.width
+                            val normalizedY = downPosition.y / size.height
+                            
+                            tapPosition = downPosition
+                            
+                            // Send target coordinates
+                            viewModel.sendTargetCoordinates(normalizedX, normalizedY)
+                            
+                            // Clear tap indicator after delay
+                            scope.launch {
+                                delay(1000)
+                                tapPosition = null
+                            }
                         }
                     }
                 }
@@ -81,6 +167,11 @@ fun VideoScreen(
         // Tap indicator (crosshair)
         tapPosition?.let { position ->
             TapCrosshair(position)
+        }
+        
+        // Bounding box preview during drag
+        boundingBox?.let { box ->
+            BoundingBoxOverlay(box)
         }
         
         // Telemetry overlay (top-left)
@@ -134,6 +225,49 @@ fun TapCrosshair(position: Offset) {
             center = position,
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
         )
+    }
+}
+
+@Composable
+fun BoundingBoxOverlay(box: Rect) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val color = Color.Green
+        val strokeWidth = 3.dp.toPx()
+        val fillColor = Color.Green.copy(alpha = 0.2f)
+        
+        // Draw filled rectangle
+        drawRect(
+            color = fillColor,
+            topLeft = Offset(box.left, box.top),
+            size = androidx.compose.ui.geometry.Size(box.width, box.height)
+        )
+        
+        // Draw border
+        drawRect(
+            color = color,
+            topLeft = Offset(box.left, box.top),
+            size = androidx.compose.ui.geometry.Size(box.width, box.height),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+        )
+        
+        // Draw corner markers (for better visibility)
+        val markerSize = 20.dp.toPx()
+        
+        // Top-left corner
+        drawLine(color, Offset(box.left, box.top), Offset(box.left + markerSize, box.top), strokeWidth * 1.5f)
+        drawLine(color, Offset(box.left, box.top), Offset(box.left, box.top + markerSize), strokeWidth * 1.5f)
+        
+        // Top-right corner
+        drawLine(color, Offset(box.right, box.top), Offset(box.right - markerSize, box.top), strokeWidth * 1.5f)
+        drawLine(color, Offset(box.right, box.top), Offset(box.right, box.top + markerSize), strokeWidth * 1.5f)
+        
+        // Bottom-left corner
+        drawLine(color, Offset(box.left, box.bottom), Offset(box.left + markerSize, box.bottom), strokeWidth * 1.5f)
+        drawLine(color, Offset(box.left, box.bottom), Offset(box.left, box.bottom - markerSize), strokeWidth * 1.5f)
+        
+        // Bottom-right corner
+        drawLine(color, Offset(box.right, box.bottom), Offset(box.right - markerSize, box.bottom), strokeWidth * 1.5f)
+        drawLine(color, Offset(box.right, box.bottom), Offset(box.right, box.bottom - markerSize), strokeWidth * 1.5f)
     }
 }
 
