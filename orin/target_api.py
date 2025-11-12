@@ -82,26 +82,28 @@ class TargetPublisher(Node):
         self.publisher_ = self.create_publisher(RegionOfInterest, '/target_roi', 10)
         
         # Subscribe to camera_info to get current video resolution
-        # Use RELIABLE QoS to ensure we get the camera_info messages
-        camera_info_qos = QoSProfile(
-            reliability=ReliabilityPolicy.RELIABLE,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10
-        )
+        # Use sensor_data QoS profile (BEST_EFFORT) to match publisher
+        from rclpy.qos import qos_profile_sensor_data
+        
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
             '/recomo/camera_info',
             self._camera_info_callback,
-            camera_info_qos
+            qos_profile_sensor_data
         )
-        self.get_logger().info('Subscribed to /recomo/camera_info')
+        self.get_logger().info('Subscribed to /recomo/camera_info with sensor_data QoS profile')
         
         # Subscribe to telemetry for debugging (optional)
+        telemetry_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
+        )
         self.telemetry_sub = self.create_subscription(
             String,
             '/recomo/rgb/telemetry',
             self._telemetry_callback,
-            camera_info_qos
+            telemetry_qos
         )
         
         # Default to 1080p until we get camera_info
