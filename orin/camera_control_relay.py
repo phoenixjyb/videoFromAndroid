@@ -25,6 +25,8 @@ import json
 import logging
 import signal
 import sys
+import threading
+from queue import Queue
 from typing import Optional
 
 import rclpy
@@ -52,6 +54,13 @@ class CameraControlRelay(Node):
         self.phone_host = phone_host
         self.phone_port = phone_port
         self.ws_uri = f'ws://{phone_host}:{phone_port}/control'
+        
+        # Command queue for thread-safe communication
+        self.command_queue = Queue()
+        
+        # Start async worker thread
+        self.async_thread = threading.Thread(target=self._async_worker, daemon=True)
+        self.async_thread.start()
         
         self.get_logger().info(f'Camera Control Relay initialized')
         self.get_logger().info(f'Phone WebSocket: {self.ws_uri}')
@@ -108,6 +117,22 @@ class CameraControlRelay(Node):
         
         self.get_logger().info('✅ All camera control topic subscriptions created')
     
+    def _async_worker(self):
+        """Worker thread that runs async event loop"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(self._process_commands())
+    
+    async def _process_commands(self):
+        """Process commands from queue and send via WebSocket"""
+        while True:
+            # Wait for command from queue
+            await asyncio.sleep(0.01)  # Small delay to prevent busy waiting
+            
+            if not self.command_queue.empty():
+                command = self.command_queue.get()
+                await self._send_command(command)
+    
     async def _send_command(self, command: dict):
         """Send command to phone via WebSocket"""
         try:
@@ -125,7 +150,7 @@ class CameraControlRelay(Node):
             'type': 'setZoomRatio',
             'value': float(msg.data)
         }
-        asyncio.create_task(self._send_command(command))
+        self.command_queue.put(command)
     
     def _ae_lock_callback(self, msg: Bool):
         """Handle AE lock command"""
@@ -134,7 +159,7 @@ class CameraControlRelay(Node):
             'type': 'setAeLock',
             'value': bool(msg.data)
         }
-        asyncio.create_task(self._send_command(command))
+        self.command_queue.put(command)
     
     def _awb_lock_callback(self, msg: Bool):
         """Handle AWB lock command"""
@@ -143,7 +168,7 @@ class CameraControlRelay(Node):
             'type': 'setAwbLock',
             'value': bool(msg.data)
         }
-        asyncio.create_task(self._send_command(command))
+        self.command_queue.put(command)
     
     def _switch_callback(self, msg: String):
         """Handle camera switch command"""
@@ -152,7 +177,7 @@ class CameraControlRelay(Node):
             'type': 'switchCamera',
             'facing': msg.data
         }
-        asyncio.create_task(self._send_command(command))
+        self.command_queue.put(command)
     
     def _bitrate_callback(self, msg: Int32):
         """Handle bitrate command"""
@@ -161,7 +186,7 @@ class CameraControlRelay(Node):
             'type': 'setBitrate',
             'bitrate': int(msg.data)
         }
-        asyncio.create_task(self._send_command(command))
+        self.command_queue.put(command)
     
     def _codec_callback(self, msg: String):
         """Handle codec command"""
@@ -170,7 +195,7 @@ class CameraControlRelay(Node):
             'type': 'setCodec',
             'codec': msg.data
         }
-        asyncio.create_task(self._send_command(command))
+        self.command_queue.put(command)
     
     def _key_frame_callback(self, msg: Empty):
         """Handle key frame request"""
@@ -178,15 +203,15 @@ class CameraControlRelay(Node):
         command = {
             'type': 'requestKeyFrame'
         }
-        asyncio.create_task(self._send_command(command))
+        self.command_queue.put(command)
 
 
 def main():
     parser = argparse.ArgumentParser(description='ROS2 Camera Control Relay')
     parser.add_argument('--phone-host', type=str, required=True,
                        help='Phone IP address (e.g., 172.16.30.28)')
-    parser.add_argument('--phone-port', type=int, default=8080,
-                       help='Phone WebSocket port (default: 8080)')
+    parser.add_argument('--phone-port', type=int, default=9090,
+                       help='Phone WebSocket port (default: 9090)')
     args = parser.parse_args()
     
     # Initialize ROS2

@@ -67,11 +67,11 @@ fi
 
 # Test WebSocket port
 echo ""
-echo "🔌 Testing WebSocket port 8080..."
-if timeout 2 bash -c "cat < /dev/null > /dev/tcp/$PHONE_IP/8080" 2>/dev/null; then
-    echo "✅ Port 8080 is open"
+echo "🔌 Testing WebSocket port 9090..."
+if timeout 2 bash -c "cat < /dev/null > /dev/tcp/$PHONE_IP/9090" 2>/dev/null; then
+    echo "✅ Port 9090 is open"
 else
-    echo "⚠️  Warning: Cannot connect to port 8080"
+    echo "⚠️  Warning: Cannot connect to port 9090"
     echo "   Make sure camControl app is running on the phone"
 fi
 
