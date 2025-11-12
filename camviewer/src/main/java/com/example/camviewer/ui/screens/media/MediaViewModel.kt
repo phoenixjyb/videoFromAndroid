@@ -9,6 +9,7 @@ import com.example.camviewer.data.repository.MediaRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 /**
@@ -109,6 +110,12 @@ class MediaViewModel @Inject constructor(
      */
     fun downloadMedia(mediaItem: MediaItem) {
         viewModelScope.launch {
+            // Check if already downloaded
+            if (isMediaDownloaded(mediaItem)) {
+                Log.d(TAG, "Media already downloaded: ${mediaItem.filename}")
+                return@launch
+            }
+            
             Log.d(TAG, "Starting download: ${mediaItem.filename}")
             mediaRepository.downloadMedia(mediaItem)
                 .catch { error ->
@@ -126,6 +133,13 @@ class MediaViewModel @Inject constructor(
      */
     fun isMediaDownloaded(mediaItem: MediaItem): Boolean {
         return mediaRepository.isDownloaded(mediaItem)
+    }
+    
+    /**
+     * Get downloaded media file
+     */
+    fun getMediaFile(mediaItem: MediaItem): File? {
+        return mediaRepository.getLocalFile(mediaItem)
     }
 
     /**

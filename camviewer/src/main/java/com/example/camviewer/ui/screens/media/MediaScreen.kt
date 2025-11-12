@@ -1,5 +1,9 @@
 package com.example.camviewer.ui.screens.media
 
+import android.net.Uri
+import android.view.ViewGroup
+import android.widget.MediaController
+import android.widget.VideoView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,13 +23,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.camviewer.data.model.MediaItem
 import com.example.camviewer.data.model.MediaType
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -36,6 +45,7 @@ fun MediaScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
+    var selectedMedia by remember { mutableStateOf<MediaItem?>(null) }
     
     Scaffold(
         topBar = {
@@ -62,7 +72,10 @@ fun MediaScreen(
                         items = state.items,
                         downloadProgress = downloadProgress,
                         onMediaClick = { mediaItem ->
-                            // TODO: Navigate to detail view or play video
+                            // Only play if downloaded
+                            if (viewModel.isMediaDownloaded(mediaItem)) {
+                                selectedMedia = mediaItem
+                            }
                         },
                         onDownloadClick = { mediaItem ->
                             android.util.Log.d("MediaScreen", "Download button clicked for: ${mediaItem.filename}")
@@ -81,6 +94,15 @@ fun MediaScreen(
                 }
             }
         }
+    }
+    
+    // Video player dialog
+    selectedMedia?.let { media ->
+        VideoPlayerDialog(
+            mediaItem = media,
+            onDismiss = { selectedMedia = null },
+            getVideoFile = { viewModel.getMediaFile(it) }
+        )
     }
 }
 
@@ -420,4 +442,101 @@ private fun formatFileSize(bytes: Long): String {
 private fun formatTimestamp(timestamp: Long): String {
     val sdf = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
     return sdf.format(Date(timestamp))
+}
+
+@Composable
+fun VideoPlayerDialog(
+    mediaItem: MediaItem,
+    onDismiss: () -> Unit,
+    getVideoFile: (MediaItem) -> File?
+) {
+    val videoFile = getVideoFile(mediaItem)
+    
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.8f),
+            shape = RoundedCornerShape(16.dp),
+            color = Color.Black
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Title bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.8f))
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = mediaItem.filename,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White
+                        )
+                    }
+                }
+                
+                // Video player
+                if (videoFile != null && videoFile.exists()) {
+                    AndroidView(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        factory = { context ->
+                            VideoView(context).apply {
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                                setVideoURI(Uri.fromFile(videoFile))
+                                
+                                // Add media controller (play/pause/seek controls)
+                                val mediaController = MediaController(context)
+                                mediaController.setAnchorView(this)
+                                setMediaController(mediaController)
+                                
+                                // Auto-start playback
+                                setOnPreparedListener { player ->
+                                    player.start()
+                                }
+                            }
+                        }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Video file not found",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
