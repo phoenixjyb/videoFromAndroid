@@ -33,40 +33,16 @@ class TargetROIListener(Node):
         self.get_logger().info('Tap on CamViewer to see messages\n')
     
     def listener_callback(self, msg: RegionOfInterest):
-        """Process received ROI message"""
+        """Display received ROI message - just log the raw data"""
         self.msg_count += 1
         
-        # Convert back to normalized coordinates (0.0-1.0)
-        x_norm = msg.x_offset / 10000.0
-        y_norm = msg.y_offset / 10000.0
-        width_norm = msg.width / 10000.0
-        height_norm = msg.height / 10000.0
-        
-        # Calculate center point from top-left corner
-        center_x = x_norm + (width_norm / 2.0)
-        center_y = y_norm + (height_norm / 2.0)
-        
-        # Determine if this is a tap point or full ROI
-        is_tap_point = abs(width_norm - 0.1) < 0.001 and abs(height_norm - 0.1) < 0.001
-        
-        if is_tap_point:
-            self.get_logger().info(
-                f'📍 Tap #{self.msg_count}: '
-                f'Center=({center_x:.3f}, {center_y:.3f}) '
-                f'[default 10% box]'
-            )
-        else:
-            self.get_logger().info(
-                f'🔲 ROI #{self.msg_count}: '
-                f'TopLeft=({x_norm:.3f}, {y_norm:.3f}) '
-                f'Size=({width_norm:.3f}×{height_norm:.3f}) '
-                f'Center=({center_x:.3f}, {center_y:.3f})'
-            )
-        
-        # Raw values for debugging
-        self.get_logger().debug(
-            f'   Raw: x_offset={msg.x_offset}, y_offset={msg.y_offset}, '
-            f'width={msg.width}, height={msg.height}'
+        self.get_logger().info(
+            f'🎯 ROI #{self.msg_count}: '
+            f'x_offset={msg.x_offset}, '
+            f'y_offset={msg.y_offset}, '
+            f'width={msg.width}, '
+            f'height={msg.height}, '
+            f'do_rectify={msg.do_rectify}'
         )
 
 
