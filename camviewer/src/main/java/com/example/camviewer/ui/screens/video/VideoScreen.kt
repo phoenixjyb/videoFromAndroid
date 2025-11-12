@@ -124,10 +124,10 @@ fun VideoScreen(
                             
                             if (start != null && end != null) {
                                 // Calculate normalized bounding box (0.0-1.0)
-                                val left = min(start.x, end.x) / size.width
-                                val top = min(start.y, end.y) / size.height
-                                val right = max(start.x, end.x) / size.width
-                                val bottom = max(start.y, end.y) / size.height
+                                val left = (min(start.x, end.x) / size.width).coerceIn(0f, 1f)
+                                val top = (min(start.y, end.y) / size.height).coerceIn(0f, 1f)
+                                val right = (max(start.x, end.x) / size.width).coerceIn(0f, 1f)
+                                val bottom = (max(start.y, end.y) / size.height).coerceIn(0f, 1f)
                                 
                                 val width = right - left
                                 val height = bottom - top
@@ -146,8 +146,8 @@ fun VideoScreen(
                             }
                         } else {
                             // It was a tap
-                            val normalizedX = downPosition.x / size.width
-                            val normalizedY = downPosition.y / size.height
+                            val normalizedX = (downPosition.x / size.width).coerceIn(0f, 1f)
+                            val normalizedY = (downPosition.y / size.height).coerceIn(0f, 1f)
                             
                             tapPosition = downPosition
                             
