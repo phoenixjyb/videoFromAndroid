@@ -30,6 +30,9 @@ try:
     import rclpy
     from rclpy.node import Node
     from sensor_msgs.msg import RegionOfInterest
+    from std_msgs.msg import String
+    from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+    import json
     ROS2_AVAILABLE = True
 except ImportError:
     ROS2_AVAILABLE = False
@@ -77,7 +80,40 @@ class TargetPublisher(Node):
     def __init__(self):
         super().__init__('target_publisher')
         self.publisher_ = self.create_publisher(RegionOfInterest, '/target_roi', 10)
+        
+        # Subscribe to telemetry to get current video resolution
+        telemetry_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+        self.telemetry_sub = self.create_subscription(
+            String,
+            '/recomo/rgb/telemetry',
+            self._telemetry_callback,
+            telemetry_qos
+        )
+        
+        # Default to 1080p until we get telemetry
+        self.video_width = 1920
+        self.video_height = 1080
+        
         self.get_logger().info('Target ROI publisher node initialized')
+    
+    def _telemetry_callback(self, msg: 'String'):
+        """Extract video resolution from telemetry"""
+        try:
+            data = json.loads(msg.data)
+            if 'resolution' in data and data['resolution']:
+                width = data['resolution'].get('width')
+                height = data['resolution'].get('height')
+                if width and height:
+                    if self.video_width != width or self.video_height != height:
+                        self.get_logger().info(f'Video resolution updated: {width}x{height}')
+                    self.video_width = width
+                    self.video_height = height
+        except Exception as e:
+            self.get_logger().warn(f'Failed to parse telemetry: {e}')
     
     def publish_target(self, x: float, y: float, width: Optional[float] = None, height: Optional[float] = None):
         """
@@ -91,21 +127,25 @@ class TargetPublisher(Node):
         """
         msg = RegionOfInterest()
         
-        # Store normalized coordinates (0.0-1.0)
+        # Convert normalized coordinates (0.0-1.0) to pixel coordinates
+        # using current video resolution from telemetry
+        video_width = self.video_width
+        video_height = self.video_height
+        
         # x_offset and y_offset represent the top-left corner of the ROI
         # For a simple tap point, use small default box around the point
         if width is None or height is None:
             # Default: 10% box centered on tap point
-            msg.x_offset = int((x - 0.05) * 10000)  # Scale to pseudo-pixel for storage
-            msg.y_offset = int((y - 0.05) * 10000)
-            msg.width = int(0.1 * 10000)  # 10% default width
-            msg.height = int(0.1 * 10000)  # 10% default height
+            msg.x_offset = int((x - 0.05) * video_width)
+            msg.y_offset = int((y - 0.05) * video_height)
+            msg.width = int(0.1 * video_width)  # 10% default width
+            msg.height = int(0.1 * video_height)  # 10% default height
         else:
             # Use provided bounding box (assume x,y is top-left corner)
-            msg.x_offset = int(x * 10000)
-            msg.y_offset = int(y * 10000)
-            msg.width = int(width * 10000)
-            msg.height = int(height * 10000)
+            msg.x_offset = int(x * video_width)
+            msg.y_offset = int(y * video_height)
+            msg.width = int(width * video_width)
+            msg.height = int(height * video_height)
         
         msg.do_rectify = False  # Not using image rectification
         
@@ -113,11 +153,14 @@ class TargetPublisher(Node):
         
         if width is not None and height is not None:
             self.get_logger().info(
-                f'Published ROI: x={x:.4f}, y={y:.4f}, w={width:.4f}, h={height:.4f}'
+                f'Published ROI: normalized({x:.3f}, {y:.3f}, {width:.3f}x{height:.3f}) '
+                f'→ pixels({msg.x_offset}, {msg.y_offset}, {msg.width}x{msg.height}) '
+                f'[resolution: {video_width}x{video_height}]'
             )
         else:
             self.get_logger().info(
-                f'Published target point: ({x:.4f}, {y:.4f}) with default 10% box'
+                f'Published target point: ({x:.4f}, {y:.4f}) with default 10% box '
+                f'[resolution: {video_width}x{video_height}]'
             )
 
 
