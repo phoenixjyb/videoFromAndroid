@@ -60,6 +60,10 @@ class MediaViewModel @Inject constructor(
     private val _currentFilter = MutableStateFlow<MediaFilter?>(null)
     val currentFilter: StateFlow<MediaFilter?> = _currentFilter.asStateFlow()
 
+    // Refresh trigger - increments to force UI recomposition
+    private val _refreshTrigger = MutableStateFlow(0)
+    val refreshTrigger: StateFlow<Int> = _refreshTrigger.asStateFlow()
+
     // UI State
     private val _uiState = MutableStateFlow<MediaUiState>(MediaUiState.Empty)
     val uiState: StateFlow<MediaUiState> = combine(
@@ -124,6 +128,11 @@ class MediaViewModel @Inject constructor(
                 }
                 .collect { progress ->
                     Log.v(TAG, "Download progress for ${mediaItem.filename}: ${(progress * 100).toInt()}%")
+                    // When download completes, trigger UI refresh
+                    if (progress >= 1.0f) {
+                        Log.d(TAG, "Download completed, triggering UI refresh")
+                        _refreshTrigger.value++
+                    }
                 }
         }
     }
@@ -165,6 +174,8 @@ class MediaViewModel @Inject constructor(
             mediaRepository.deleteLocalMedia(mediaItem)
                 .onSuccess {
                     Log.d(TAG, "Successfully deleted: ${mediaItem.filename}")
+                    // Trigger UI refresh so checkmark updates to download button
+                    _refreshTrigger.value++
                 }
                 .onFailure { error ->
                     Log.e(TAG, "Failed to delete: ${mediaItem.filename}", error)

@@ -8,10 +8,12 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -46,7 +48,9 @@ fun MediaScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
+    val refreshTrigger by viewModel.refreshTrigger.collectAsState() // Trigger UI updates
     var selectedMedia by remember { mutableStateOf<MediaItem?>(null) }
+    var mediaToDelete by remember { mutableStateOf<MediaItem?>(null) }
     
     Scaffold(
         topBar = {
@@ -73,14 +77,27 @@ fun MediaScreen(
                         items = state.items,
                         downloadProgress = downloadProgress,
                         onMediaClick = { mediaItem ->
+                            android.util.Log.e("MediaScreen", "onMediaClick called for: ${mediaItem.filename}")
                             // Only play if downloaded
                             if (viewModel.isMediaDownloaded(mediaItem)) {
+                                android.util.Log.e("MediaScreen", "Video is downloaded, playing...")
                                 selectedMedia = mediaItem
+                            } else {
+                                android.util.Log.e("MediaScreen", "Video NOT downloaded, ignoring click")
                             }
                         },
                         onDownloadClick = { mediaItem ->
-                            android.util.Log.d("MediaScreen", "Download button clicked for: ${mediaItem.filename}")
+                            android.util.Log.e("MediaScreen", ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+                            android.util.Log.e("MediaScreen", "onDownloadClick LAMBDA called!")
+                            android.util.Log.e("MediaScreen", "File: ${mediaItem.filename}")
+                            android.util.Log.e("MediaScreen", "Calling viewModel.downloadMedia()...")
                             viewModel.downloadMedia(mediaItem)
+                            android.util.Log.e("MediaScreen", "viewModel.downloadMedia() returned")
+                            android.util.Log.e("MediaScreen", ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+                        },
+                        onDeleteClick = { mediaItem ->
+                            android.util.Log.d("MediaScreen", "Long press detected, showing delete confirmation for: ${mediaItem.filename}")
+                            mediaToDelete = mediaItem
                         },
                         isDownloaded = { mediaItem ->
                             viewModel.isMediaDownloaded(mediaItem)
@@ -103,6 +120,31 @@ fun MediaScreen(
             mediaItem = media,
             onDismiss = { selectedMedia = null },
             getVideoFile = { viewModel.getMediaFile(it) }
+        )
+    }
+    
+    // Delete confirmation dialog
+    mediaToDelete?.let { media ->
+        AlertDialog(
+            onDismissRequest = { mediaToDelete = null },
+            title = { Text("Delete Video") },
+            text = { Text("Are you sure you want to delete '${media.filename}'? This will remove the downloaded file from your device.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        android.util.Log.d("MediaScreen", "Deleting local media: ${media.filename}")
+                        viewModel.deleteLocalMedia(media)
+                        mediaToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mediaToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }
@@ -134,6 +176,7 @@ fun MediaGrid(
     downloadProgress: Map<String, Float>,
     onMediaClick: (MediaItem) -> Unit,
     onDownloadClick: (MediaItem) -> Unit,
+    onDeleteClick: (MediaItem) -> Unit,
     isDownloaded: (MediaItem) -> Boolean
 ) {
     LazyVerticalGrid(
@@ -148,7 +191,8 @@ fun MediaGrid(
                 downloadProgress = downloadProgress[mediaItem.id],
                 isDownloaded = isDownloaded(mediaItem),
                 onClick = { onMediaClick(mediaItem) },
-                onDownloadClick = { onDownloadClick(mediaItem) }
+                onDownloadClick = { onDownloadClick(mediaItem) },
+                onDeleteClick = { onDeleteClick(mediaItem) }
             )
         }
     }
@@ -160,32 +204,57 @@ fun MediaCard(
     downloadProgress: Float?,
     isDownloaded: Boolean,
     onClick: () -> Unit,
-    onDownloadClick: () -> Unit
+    onDownloadClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        android.util.Log.d("MediaScreen", "Card tapped: ${mediaItem.filename}, downloaded: $isDownloaded")
-                        onClick()
-                    }
-                )
-            },
+            .aspectRatio(1f),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            // Clickable thumbnail area (doesn't cover bottom-right corner where download button is)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 72.dp, end = 72.dp)  // Leave more space for download button
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                android.util.Log.d("MediaScreen", "Thumbnail tapped: ${mediaItem.filename}, downloaded: $isDownloaded")
+                                onClick()
+                            },
+                            onLongPress = {
+                                android.util.Log.d("MediaScreen", "Long press detected on: ${mediaItem.filename}, isDownloaded: $isDownloaded")
+                                if (isDownloaded) {
+                                    android.util.Log.d("MediaScreen", "Long press on downloaded video: ${mediaItem.filename}")
+                                    onDeleteClick()
+                                } else {
+                                    android.util.Log.d("MediaScreen", "Long press ignored - video not downloaded: ${mediaItem.filename}")
+                                }
+                            }
+                        )
+                    }
+            )
+            
             // Thumbnail
             if (mediaItem.thumbnailUrl != null) {
+                android.util.Log.d("MediaScreen", "Loading thumbnail for ${mediaItem.filename}: ${mediaItem.thumbnailUrl}")
                 AsyncImage(
                     model = mediaItem.thumbnailUrl,
                     contentDescription = mediaItem.filename,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    onError = { error ->
+                        android.util.Log.e("MediaScreen", "Failed to load thumbnail for ${mediaItem.filename}: ${error.result.throwable.message}")
+                    },
+                    onSuccess = {
+                        android.util.Log.d("MediaScreen", "Successfully loaded thumbnail for ${mediaItem.filename}")
+                    }
                 )
             } else {
+                android.util.Log.w("MediaScreen", "No thumbnail URL for ${mediaItem.filename}")
                 // Placeholder for missing thumbnail
                 Box(
                     modifier = Modifier
@@ -264,31 +333,30 @@ fun MediaCard(
                 }
             } else if (!isDownloaded) {
                 // Not downloaded, show download button
-                Box(
+                IconButton(
+                    onClick = {
+                        android.util.Log.e("MediaScreen", "========================================")
+                        android.util.Log.e("MediaScreen", "DOWNLOAD BUTTON CLICKED!!!")
+                        android.util.Log.e("MediaScreen", "File: ${mediaItem.filename}")
+                        android.util.Log.e("MediaScreen", "ID: ${mediaItem.id}")
+                        android.util.Log.e("MediaScreen", "Calling onDownloadClick()...")
+                        onDownloadClick()
+                        android.util.Log.e("MediaScreen", "onDownloadClick() returned")
+                        android.util.Log.e("MediaScreen", "========================================")
+                    },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(4.dp)
-                        .size(48.dp)
+                        .size(64.dp)  // Even larger clickable area
                         .background(
                             color = Color.Black.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(24.dp)
+                            shape = RoundedCornerShape(32.dp)
                         )
-                        .clip(RoundedCornerShape(24.dp))
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onTap = {
-                                    android.util.Log.d("MediaScreen", "POINTER INPUT TAP: ${mediaItem.filename}")
-                                    onDownloadClick()
-                                }
-                            )
-                        },
-                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Download,
                         contentDescription = "Download",
                         tint = Color.White,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(32.dp)
                     )
                 }
             } else {

@@ -153,11 +153,17 @@ class MediaRepository @Inject constructor(
         try {
             val destination = File(getDownloadsDir(), mediaItem.filename)
 
-            // Check if already downloaded
+            // Check if already downloaded with correct size
             if (destination.exists() && destination.length() == mediaItem.size) {
                 Log.d(TAG, "Media already downloaded: ${mediaItem.filename}")
                 emit(1.0f)
                 return@flow
+            }
+
+            // If file exists but size doesn't match, delete it
+            if (destination.exists()) {
+                Log.w(TAG, "Existing file size mismatch for ${mediaItem.filename}, deleting (expected: ${mediaItem.size}, actual: ${destination.length()})")
+                destination.delete()
             }
 
             Log.d(TAG, "Starting download: ${mediaItem.filename}")
@@ -176,7 +182,7 @@ class MediaRepository @Inject constructor(
                 remove(mediaItem.id)
             }
 
-            Log.d(TAG, "Download complete: ${mediaItem.filename}")
+            Log.d(TAG, "Download complete: ${mediaItem.filename}, size: ${destination.length()} bytes")
         } catch (e: Exception) {
             Log.e(TAG, "Download failed for ${mediaItem.filename}", e)
             _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
@@ -223,12 +229,29 @@ class MediaRepository @Inject constructor(
         runCatching {
             val file = File(getDownloadsDir(), mediaItem.filename)
             if (file.exists()) {
-                file.delete()
-                Log.d(TAG, "Deleted local media: ${mediaItem.filename}")
+                val deleted = file.delete()
+                if (deleted) {
+                    Log.d(TAG, "Deleted local media: ${mediaItem.filename}")
+                } else {
+                    Log.e(TAG, "Failed to delete local media: ${mediaItem.filename}")
+                }
+            } else {
+                Log.d(TAG, "File doesn't exist, nothing to delete: ${mediaItem.filename}")
             }
 
             // Also delete thumbnail
-            getCachedThumbnail(mediaItem)?.delete()
+            getCachedThumbnail(mediaItem)?.let { thumbFile ->
+                if (thumbFile.exists()) {
+                    thumbFile.delete()
+                    Log.d(TAG, "Deleted thumbnail: ${thumbFile.name}")
+                }
+            }
+            
+            // Remove from download progress if present
+            _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                remove(mediaItem.id)
+            }
+            
             Unit // Explicitly return Unit
         }
     }
