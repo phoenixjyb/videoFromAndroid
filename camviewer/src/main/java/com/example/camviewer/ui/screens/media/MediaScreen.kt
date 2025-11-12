@@ -3,6 +3,7 @@ package com.example.camviewer.ui.screens.media
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -16,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +65,7 @@ fun MediaScreen(
                             // TODO: Navigate to detail view or play video
                         },
                         onDownloadClick = { mediaItem ->
+                            android.util.Log.d("MediaScreen", "Download button clicked for: ${mediaItem.filename}")
                             viewModel.downloadMedia(mediaItem)
                         },
                         isDownloaded = { mediaItem ->
@@ -139,8 +142,7 @@ fun MediaCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable(onClick = onClick),
+            .aspectRatio(1f),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -231,22 +233,31 @@ fun MediaCard(
                 }
             } else if (!isDownloaded) {
                 // Not downloaded, show download button
-                IconButton(
-                    onClick = onDownloadClick,
+                Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(4.dp)
-                        .size(32.dp)
+                        .size(48.dp)
                         .background(
                             color = Color.Black.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(24.dp)
                         )
+                        .clip(RoundedCornerShape(24.dp))
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = {
+                                    android.util.Log.d("MediaScreen", "POINTER INPUT TAP: ${mediaItem.filename}")
+                                    onDownloadClick()
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Download,
                         contentDescription = "Download",
                         tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             } else {
