@@ -30,7 +30,7 @@ class VideoDecoder @Inject constructor() {
      * @param surface Output surface for rendering
      */
     suspend fun initialize(
-        codecType: String = MediaFormat.MIMETYPE_VIDEO_AVC, // H.264 default
+        codecType: String = MediaFormat.MIMETYPE_VIDEO_HEVC, // H.265 default
         width: Int = 1920,
         height: Int = 1080,
         surface: Surface?

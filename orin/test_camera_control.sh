@@ -92,6 +92,11 @@ ros2 topic pub --once /camera/codec std_msgs/String "data: 'h264'"
 sleep 2
 
 echo ""
+echo "Switching back to H.265 (default)..."
+ros2 topic pub --once /camera/codec std_msgs/String "data: 'h265'"
+sleep 2
+
+echo ""
 echo "✅ All tests complete!"
 echo ""
 echo "Note: Check the phone's camControl app to verify that"
