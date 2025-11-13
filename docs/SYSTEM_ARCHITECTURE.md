@@ -1,103 +1,188 @@
-# System Architecture — CamControl + CamViewer + Orin
+# System Architecture Overview
 
-## Overview
+**Last Updated**: November 13, 2025  
+**Status**: Production - Fully Operational
 
-This document describes the complete system architecture with three main components:
-1. **CamControl** (Android Phone) — **VIDEO SOURCE**: Camera capture, encoding, and broadcasting
-2. **CamViewer** (Android Tablet) — **VIDEO CLIENT #1**: Viewer with interactive target selection
-3. **Orin** (Jetson Backend) — **VIDEO CLIENT #2**: Video processing, ROS2 publisher, and target tracking
+## Purpose
 
-## Key Architecture Principle
+This document provides a high-level overview of the complete CamControl system architecture. For detailed specifications, see the reference documents listed at the end.
 
-**CamControl is the SINGLE VIDEO SOURCE that broadcasts to MULTIPLE CLIENTS:**
-- Orin consumes video → publishes to ROS2 `/recomo/rgb` topic (already implemented)
-- CamViewer consumes video → displays to user → sends target selections to Orin
-- Web Browser consumes video → displays to user with controls
+## System Components
 
-**Orin has a DUAL ROLE:**
-1. Video Consumer: Receives video from CamControl, publishes to ROS2
-2. Target Selection API: Receives target coordinates from CamViewer, publishes to ROS2 `/target_roi` topic
+The system consists of three main components working together:
 
-## Updated Architecture Diagram
+1. **CamControl** (Android Phone) — **VIDEO SOURCE**: Camera capture, H.265 encoding, and WebSocket broadcast
+2. **CamViewer** (Android Tablet) — **VIDEO CLIENT**: Real-time viewer with camera controls and target selection
+3. **Orin** (Jetson Backend) — **PROCESSING HUB**: ROS2 bridge, camera control relay, target API, and media server
+
+## Core Architecture Principle
+
+**CamControl broadcasts to multiple clients simultaneously:**
+- All clients receive the same H.265 video stream via WebSocket :9090
+- Any client can send camera control commands via WebSocket :9090/control
+- Orin bridges video to ROS2 topics and relays ROS2 commands back to phone
+- Three-way control: WebUI (primary dev), CamViewer (field ops), ROS2 topics (automation)
+
+## High-Level Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                     MULTI-CLIENT VIDEO DISTRIBUTION                           │
-└──────────────────────────────────────────────────────────────────────────────┘
-
-                        ┌─────────────────────────┐
-                        │   CamControl (Phone)    │
-                        │   📹 VIDEO SOURCE        │
-                        │                         │
-                        │  • Camera2 API          │
-                        │  • MediaCodec Encoder   │
-                        │  • H.264/H.265 Output   │
-                        │  • WebSocket Broadcast  │
-                        │  • Command Receiver     │
-                        └────────────┬────────────┘
-                                     │ WS :9090
-                                     │ (broadcasts to all)
-                        ┌────────────┴────────────┐
-                        │                         │
-                        ▼                         ▼
-        ┌───────────────────────┐   ┌───────────────────────┐
-        │  Orin (Jetson)        │   │  CamViewer (Tablet)   │
-        │  🎯 VIDEO CLIENT #1    │   │  📱 VIDEO CLIENT #2    │
-        │                       │   │                       │
-        │  Video Consumer:      │   │  Video Consumer:      │
-        │  • WS Client          │   │  • WS Client          │
-        │  • GStreamer Decode   │   │  • MediaCodec Decode  │
-        │  • Publish to ROS2:   │   │  • SurfaceView        │
-        │    /recomo/rgb        │   │                       │
-        │                       │   │  User Interaction:    │
-        │  Target API Server:   │   │  • Bounding Box UI    │
-        │  • HTTP/WS :8080      │◄──┤  • Long-press Select  │
-        │  • Receive Target ROI │   │  • Coordinate Convert │
-        │  • Publish to ROS2:   │   │  • Send to Orin       │
-        │    /target_roi        │   │                       │
-        │                       │   │  Optional Controls:   │
-        │  Optional:            │   │  • Camera control UI  │
-        │  • RTSP Server :8554  │   │  • Developer mode     │
-        └───────────────────────┘   └───────────────────────┘
-                                             │
-                                             ▼
-                                    ┌───────────────┐
-                                    │  Web Browser  │
-                                    │  💻 CLIENT #3  │
-                                    │               │
-                                    │  • WebCodecs  │
-                                    │  • Controls   │
-                                    └───────────────┘
+                    ┌─────────────────────────────────────────┐
+                    │      CamControl (Phone)                 │
+                    │      📹 VIDEO SOURCE                     │
+                    │                                         │
+                    │  • Camera2 API + MediaCodec H.265       │
+                    │  • WebSocket Server :9090               │
+                    │  • Broadcasts to all clients            │
+                    │  • Receives control commands            │
+                    └────────────┬────────────────────────────┘
+                                 │
+                                 │ ws://phone-ip:9090
+                                 │ (video + telemetry + control)
+                    ┌────────────┴────────────┬───────────────┐
+                    │                         │               │
+                    ▼                         ▼               ▼
+        ┌───────────────────┐   ┌───────────────────┐  ┌──────────┐
+        │  Orin (Jetson)    │   │  CamViewer        │  │ Browser  │
+        │  🎯 PROCESSING     │   │  📱 FIELD OPS      │  │ 💻 DEV   │
+        │                   │   │                   │  │          │
+        │ • Video→ROS2      │   │ • Video Display   │  │ • WebUI  │
+        │   /recomo/rgb     │   │ • Dev Controls    │  │ • Camera │
+        │ • ROS2→Commands   │   │ • Target Select   │  │   Control│
+        │   /camera/*       │   │ • Media Browser   │  │ • Primary│
+        │ • Target API      │◄──┤   → Orin :8082    │  │   Tool   │
+        │   :8082           │   │ • Media Download  │  │          │
+        │ • Media API       │◄──┤   → Orin :8081    │  │          │
+        │   :8081           │   │                   │  │          │
+        └───────┬───────────┘   └───────────────────┘  └──────────┘
+                │
+                │ DDS
+                ▼
+        ┌───────────────┐
+        │  ROS2 Topics  │
+        │               │
+        │ • /recomo/rgb │ ← Video stream
+        │ • /camera/*   │ → Camera control (7 topics)
+        │ • /target_roi │ ← Target selection
+        └───────────────┘
 ```
 
-## Component Details
+## Component Summary
 
-### 1. CamControl (VIDEO SOURCE - Android Phone)
+### 1. CamControl (Phone Camera App)
+
+**Role**: Video source and command receiver  
 **Package**: `com.example.camcontrol`  
-**Application ID**: `com.example.camcontrol`  
-**Role**: Single video source that broadcasts to multiple clients
+**Hardware**: Android phone with Camera2 API support
 
-#### Key Features
-- Camera2 API for camera access and control
-- MediaCodec H.264/H.265 encoding
-- Ktor WebSocket server (port 9090) - broadcasts to ALL connected clients
+**Key Features**:
+- Camera2 API for camera hardware access
+- MediaCodec H.265 encoder (default, H.264 fallback)
+- Ktor WebSocket server on port 9090
+- Broadcasts to unlimited concurrent clients
+- Accepts commands from any connected client
 - On-device MP4 recording with MediaMuxer
-- Telemetry broadcasting (AF/AE/ISO/FPS) to all clients
-- Control command receiver (zoom, camera switch, exposure, etc.)
-- **Serves multiple concurrent clients simultaneously**
+- Default bitrate: ~8.2 Mbps (1080p30 H.265)
 
-#### Network Endpoints
-- **WebSocket**: `ws://<camcontrol-ip>:9090/control`
-  - Binary frames: H.264 Annex-B video (broadcast to all clients)
-  - Text frames: JSON telemetry (broadcast to all clients)
-  - Receives control commands from any client
-- **HTTP**: `http://<camcontrol-ip>:9090/` (serves web UI)
+**Network Endpoints**:
+- `ws://phone-ip:9090/` - Video stream + telemetry (broadcast)
+- `ws://phone-ip:9090/control` - Camera commands (receive)
+- `http://phone-ip:9090/` - WebUI HTML page
 
-#### Client Support
-- ✅ Supports multiple simultaneous WebSocket connections
-- ✅ Broadcasts same video stream to all clients
-- ✅ Accepts commands from any connected client
-- ✅ Current clients: Orin, CamViewer, Web Browser
+**Status**: ✅ Fully operational
+
+---
+
+### 2. CamViewer (Tablet Viewer App)
+
+**Role**: Field operations client with enhanced features  
+**Package**: `com.example.camviewer`  
+**Hardware**: Android tablet
+
+**Key Features**:
+- MediaCodec H.265 video decoder
+- Real-time video playback on SurfaceView
+- **Developer mode** camera controls (complementary to WebUI)
+- Target/ROI selection (tap/drag gestures)
+- Bounding box visualization
+- Media browser (browse/download videos from Orin)
+- Settings management (phone IP, Orin IP, dev mode toggle)
+
+**Network Connections**:
+- `ws://phone-ip:9090/` - Receive video (WebSocket client)
+- `ws://phone-ip:9090/control` - Send commands (WebSocket client)
+- `http://orin-ip:8082/target` - Send target ROI (HTTP POST)
+- `http://orin-ip:8081/media/*` - Browse/download media (HTTP GET)
+
+**Status**: ✅ Fully operational
+
+---
+
+### 3. Orin (Jetson Backend)
+
+**Role**: Processing hub with multiple services  
+**Hardware**: NVIDIA Jetson Orin (or similar)
+
+**Four Main Services**:
+
+#### A. Phone-ROS2 Bridge (`ws_to_image` node)
+- Connects to phone WebSocket :9090
+- GStreamer H.265 decode (NVDEC hardware acceleration)
+- RGB conversion and ROS2 publishing
+- Publishes to `/recomo/rgb` topic (~10 Hz)
+- Publishes to `/recomo/camera_info` topic
+- Downscales 1920×1080 → 640×480 for efficiency
+
+#### B. Camera Control Relay (`camera_control_relay.py`)
+- Subscribes to 7 ROS2 `/camera/*` topics
+- Forwards commands to phone via WebSocket :9090/control
+- Enables ROS2-based automation and control
+- Async command queue prevents blocking
+
+#### C. Target API Server (`target_api.py` on :8082)
+- HTTP REST API for target selection
+- Receives ROI from CamViewer (normalized coordinates)
+- Transforms coordinates using camera_info
+- Publishes to ROS2 `/target_roi` topic
+- WebSocket support for real-time updates
+
+#### D. Media API Server (`media_api.py` on :8081)
+- HTTP REST API for media management
+- Serves videos from `saved_videos/` directory
+- Thumbnail generation and caching
+- Download with Range header support (resume capability)
+- Delete functionality
+- Metadata query (resolution, duration, codec, etc.)
+
+**Network Endpoints**:
+- `ws://phone-ip:9090/` - Video consumer (client)
+- `ws://phone-ip:9090/control` - Command sender (client)
+- `http://orin-ip:8082/*` - Target API (server)
+- `http://orin-ip:8081/*` - Media API (server)
+
+**ROS2 Topics**:
+- **Publishes**: `/recomo/rgb`, `/recomo/camera_info`, `/target_roi`
+- **Subscribes**: `/camera/*` (7 control topics)
+
+**Status**: ✅ Fully operational
+
+---
+
+### 4. WebUI (Browser Interface)
+
+**Role**: Primary development and testing interface  
+**Technology**: HTML5 + JavaScript (WebCodecs API)  
+**Access**: `http://phone-ip:9090/`
+
+**Key Features**:
+- WebCodecs API for H.265 decode (Safari 16.4+, Chrome 94+)
+- Broadway.js fallback for H.264 (Firefox)
+- Real-time video display on Canvas
+- Camera control UI (zoom, switch, bitrate, codec, AE/AWB locks)
+- Telemetry display (resolution, FPS, codec, bitrate)
+- Decoder type indicator
+- **Primary tool for developers** (not CamViewer developer mode)
+
+**Status**: ✅ Fully operational
 
 #### Communication Protocol
 ```json
@@ -111,14 +196,126 @@ This document describes the complete system architecture with three main compone
 {"cmd": "stopRecording"}
 
 // Telemetry (sent)
-{
-  "af": "FOCUSED_LOCKED",
-  "ae": "CONVERGED",
-  "iso": 250,
-  "expNs": 16666667,
-  "zoom": 1.0,
-  "fps": 29.8
-}
+## Communication Protocols
+
+All network communication uses **WiFi on port 9090** (phone) and additional Orin services on **8081** (media) and **8082** (target).
+
+### Video Streaming
+- **Protocol**: WebSocket binary frames
+- **Format**: H.265 Annex-B NAL units (default), H.264 fallback
+- **Bitrate**: ~8.2 Mbps (1080p30, configurable 2-50 Mbps)
+- **Latency**: 50-150ms end-to-end
+
+### Camera Control
+- **Protocol**: WebSocket JSON text frames
+- **Discriminator**: `"cmd"` field (not `"type"`)
+- **Commands**: 7 types (zoom, ae_lock, awb_lock, switch, bitrate, codec, key_frame)
+
+### Target Selection
+- **Protocol**: HTTP POST to Orin :8082
+- **Format**: JSON with normalized coordinates
+- **Flow**: CamViewer → Orin → ROS2 `/target_roi`
+
+### Media Retrieval
+- **Protocol**: HTTP REST API from Orin :8081
+- **Features**: List, thumbnail, download, delete
+- **Support**: Range headers for resume capability
+
+## Data Flows
+
+### Video Distribution (1→Many)
+```
+Phone Camera → H.265 Encode → WebSocket :9090 → Broadcast
+                                    ↓
+                    ┌───────────────┼───────────────┐
+                    ↓               ↓               ↓
+                  Orin          CamViewer        Browser
+                (GStreamer)    (MediaCodec)    (WebCodecs)
+                    ↓
+                ROS2 /recomo/rgb
+```
+
+### Camera Control (Many→1)
+```
+WebUI / CamViewer / ROS2 → JSON Command → Phone :9090/control
+                                            ↓
+                                    Camera2 API applies
+                                            ↓
+                            Telemetry broadcast to all
+```
+
+### Target Tracking (CamViewer→Orin→ROS2)
+```
+User Selection → CamViewer → HTTP POST :8082 → Orin
+                                                  ↓
+                                          ROS2 /target_roi
+```
+
+## Port Summary
+
+| Service | Port | Protocol | Purpose |
+|---------|------|----------|---------|
+| Phone WebSocket | 9090 | WS/HTTP | Video + Control |
+| Orin Target API | 8082 | HTTP | ROI selection |
+| Orin Media API | 8081 | HTTP | Media browse/download |
+| ROS2 DDS | N/A | DDS | Internal topics |
+
+## Project Status
+
+### ✅ Fully Operational
+- Video streaming (H.265) to all clients
+- Three-way camera control (WebUI, CamViewer, ROS2)
+- Phone-to-ROS2 bridge (`/recomo/rgb`)
+- ROS2-to-phone relay (`/camera/*` topics)
+- Target selection and ROI publishing
+- Media retrieval API
+- On-device recording
+
+### 🚧 Future Enhancements
+- ROS2 video publisher optimization
+- Complete vision pipeline (tracking loop)
+- Production deployment packaging
+- Authentication and encryption
+
+## Implementation Files
+
+### Phone (CamControl)
+- `app/src/main/java/com/example/camcontrol/`
+  - `CamControlService.kt` - Main service, WebSocket server
+  - `MainActivity.kt` - Camera2 pipeline
+  - `encode/VideoEncoder.kt` - H.265 encoder
+  - `transport/ControlServer.kt` - Ktor routes
+
+### Tablet (CamViewer)
+- `camviewer/src/main/java/com/example/camviewer/`
+  - `MainActivity.kt` - Main app
+  - `network/PhoneCameraClient.kt` - WebSocket client
+  - `video/VideoDecoder.kt` - H.265 decoder
+  - `network/OrinTargetClient.kt` - Target API client
+  - `ui/screens/` - Video display, controls, media browser
+
+### Orin Services
+- `orin/start_phone_ros2_bridge.sh` - Video→ROS2 bridge
+- `orin/camera_control_relay.py` - ROS2→phone commands
+- `orin/target_api.py` - Target selection API
+- `orin/media_api.py` - Media management API
+- `orin/start_all_services.sh` - Start all services
+- `orin/stop_all_services.sh` - Stop all services
+
+## Related Documentation
+
+For detailed specifications, see:
+
+- **[WEBSOCKET_ARCHITECTURE.md](WEBSOCKET_ARCHITECTURE.md)** - Complete WebSocket protocol details
+- **[ROS2_TOPICS_REFERENCE.md](ROS2_TOPICS_REFERENCE.md)** - All ROS2 topics and usage
+- **[THREE_WAY_CAMERA_CONTROL.md](THREE_WAY_CAMERA_CONTROL.md)** - Camera control implementation
+- **[NETWORK_PROTOCOLS.md](NETWORK_PROTOCOLS.md)** - Network protocol specifications
+- **[../README.md](../README.md)** - Main project documentation
+
+---
+
+**Last Updated**: November 13, 2025  
+**System Version**: v1.0 - Production Ready
 ```
 
 ### 2. CamViewer (ENHANCED VIDEO CLIENT - Android Tablet) — NEW
