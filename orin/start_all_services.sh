@@ -75,8 +75,10 @@ echo "Services running:"
 echo "  Target API: http://$(hostname -I | awk '{print $1}'):8080"
 echo "  Media API:  http://$(hostname -I | awk '{print $1}'):8081"
 echo
-echo "To stop all services:"
-echo "  ./stop_all.sh"
+echo ""
+echo "To stop all services, run:"
+echo "  ./stop_all_services.sh"
+echo ""
 echo
 echo "To view logs:"
 echo "  tail -f target_api.log"

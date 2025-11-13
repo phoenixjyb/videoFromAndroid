@@ -2,19 +2,7 @@
 
 Utility scripts for development and testing.
 
-## Quick Start Scripts
-
-### `quick_start.sh`
-Main development workflow script that handles:
-- Building the Android APK
-- Installing to connected device
-- Setting up ADB port forwarding
-- Starting the camera service
-
-**Usage:**
-```bash
-./tools/quick_start.sh
-```
+## Quick Logs Script
 
 ### `quick_logs.sh`
 Monitors Android logcat for application-specific logs.
@@ -24,8 +12,13 @@ Monitors Android logcat for application-specific logs.
 ./tools/quick_logs.sh
 ```
 
+**Note:** The ROS2 publisher quick start script has been moved to `orin/start_ros2_publisher.sh`.
+
 ## See Also
 
 - `/tests/` - Test scripts and validation tools
 - `/scripts/` - Production-ready recording and streaming scripts
-- `/orin/` - ROS2 integration tools
+- `/orin/` - ROS2 integration tools and service management
+  - `start_all_services.sh` - Start all Orin services (target API, media API, camera relay)
+  - `stop_all_services.sh` - Stop all Orin services
+  - `start_ros2_publisher.sh` - Start ROS2 image publisher with ADB forwarding
