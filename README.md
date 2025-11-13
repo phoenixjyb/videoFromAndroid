@@ -85,19 +85,38 @@ adb -s <tablet-serial> install camviewer/build/outputs/apk/debug/camviewer-debug
 
 ### 2. Start Camera Server (Phone)
 - Launch CamControl app
-- Note the IP address shown (e.g., `172.16.30.28`)
+- Note the IP address shown (depends on network):
+  - **ZeroTier**: `192.168.100.156`
+  - **T8Space**: `172.16.30.28`
 - Keep app in foreground
 
 ### 3. Connect Clients
 
+**CamViewer (Tablet):**
+- Open Settings → Select Network Preset
+- Choose "ZeroTier" or "T8Space"
+- Toggle Developer Mode ON for camera controls
+
 **WebUI (Browser):**
+
+ZeroTier network:
 ```
-http://<phone-ip>:9090/
+http://192.168.100.156:9090
 ```
 
-**CamViewer (Tablet):**
-- Settings → Enter phone IP address
-- Toggle Developer Mode ON for camera controls
+T8Space network:
+```
+http://172.16.30.28:9090
+```
+
+**Orin Services:**
+```bash
+# ZeroTier (default)
+cd orin && ./start_all_services.sh
+
+# T8Space
+cd orin && NETWORK_CONFIG=t8space ./start_all_services.sh
+```
 
 **ROS2 (Orin):**
 ```bash

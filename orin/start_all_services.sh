@@ -1,11 +1,27 @@
 #!/bin/bash
 # Unified start script for all Orin API services
-# Starts Target API (port 8080) and Media API (port 8081) in the background
+# Starts Target API (port 8082) and Media API (port 8081) in the background
+#
+# Usage:
+#   ./start_all_services.sh              # Use default network (zerotier)
+#   NETWORK_CONFIG=t8space ./start_all_services.sh  # Use T8Space network
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Load network configuration
+if [ -f "../config/load_network_config.sh" ]; then
+    source ../config/load_network_config.sh
+    echo "Network: $NETWORK_NAME"
+    echo "  Phone IP: $PHONE_IP"
+    echo "  Orin IP: $ORIN_IP"
+    echo
+else
+    echo "Warning: Network config not found, using defaults"
+    PHONE_IP="${PHONE_IP:-192.168.100.156}"
+fi
 
 echo "=========================================="
 echo "Orin API Services - Unified Startup"
@@ -38,10 +54,10 @@ echo
 echo "=========================================="
 echo "Starting Target API Server..."
 echo "=========================================="
-echo "  URL: http://0.0.0.0:8080"
+echo "  URL: http://0.0.0.0:${ORIN_TARGET_PORT:-8082}"
 echo "  ROS2: $ROS2_FLAG"
 echo "  Logs: target_api.log"
-nohup python3 target_api.py $ROS2_FLAG --port 8080 > target_api.log 2>&1 &
+nohup python3 target_api.py $ROS2_FLAG --port ${ORIN_TARGET_PORT:-8082} > target_api.log 2>&1 &
 TARGET_PID=$!
 echo "  PID: $TARGET_PID"
 echo "✓ Target API started"
@@ -54,10 +70,10 @@ sleep 2
 echo "=========================================="
 echo "Starting Media API Server..."
 echo "=========================================="
-echo "  URL: http://0.0.0.0:8081"
+echo "  URL: http://0.0.0.0:${ORIN_MEDIA_PORT:-8081}"
 echo "  Media dir: ./media/"
 echo "  Logs: media_api.log"
-nohup python3 media_api.py > media_api.log 2>&1 &
+nohup python3 media_api.py --port ${ORIN_MEDIA_PORT:-8081} > media_api.log 2>&1 &
 MEDIA_PID=$!
 echo "  PID: $MEDIA_PID"
 echo "✓ Media API started"

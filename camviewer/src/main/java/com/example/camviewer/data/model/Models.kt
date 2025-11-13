@@ -94,12 +94,70 @@ data class TargetCoordinates(
 )
 
 /**
+ * Network preset options
+ */
+enum class NetworkPreset(
+    val displayName: String,
+    val phoneIp: String,
+    val orinIp: String,
+    val tabletIp: String
+) {
+    ZEROTIER(
+        displayName = "ZeroTier",
+        phoneIp = "192.168.100.156",
+        orinIp = "192.168.100.150",
+        tabletIp = "192.168.100.159"
+    ),
+    T8SPACE(
+        displayName = "T8Space",
+        phoneIp = "172.16.30.28",
+        orinIp = "172.16.30.234",
+        tabletIp = "172.16.30.199"
+    ),
+    CUSTOM(
+        displayName = "Custom",
+        phoneIp = "",
+        orinIp = "",
+        tabletIp = ""
+    );
+    
+    companion object {
+        const val PHONE_WS_PORT = 9090
+        const val ORIN_TARGET_PORT = 8082
+        const val ORIN_MEDIA_PORT = 8081
+        
+        fun fromName(name: String): NetworkPreset {
+            return values().find { it.name == name } ?: ZEROTIER
+        }
+    }
+    
+    fun getPhoneVideoUrl(): String = "ws://$phoneIp:$PHONE_WS_PORT/"
+    fun getPhoneControlUrl(): String = "ws://$phoneIp:$PHONE_WS_PORT/control"
+    fun getOrinTargetUrl(): String = "http://$orinIp:$ORIN_TARGET_PORT"
+    fun getOrinMediaUrl(): String = "http://$orinIp:$ORIN_MEDIA_PORT"
+}
+
+/**
  * Settings/preferences data
  */
 data class AppSettings(
-    val cameraUrl: String = "ws://172.16.30.28:9090",
-    val orinTargetUrl: String = "http://172.16.30.234:8080",
-    val orinMediaUrl: String = "http://172.16.30.234:8081",
-    val phoneControlHost: String = "172.16.30.28",  // Phone IP for camera control commands
+    val networkPreset: NetworkPreset = NetworkPreset.ZEROTIER,
+    val cameraUrl: String = NetworkPreset.ZEROTIER.getPhoneVideoUrl(),
+    val orinTargetUrl: String = NetworkPreset.ZEROTIER.getOrinTargetUrl(),
+    val orinMediaUrl: String = NetworkPreset.ZEROTIER.getOrinMediaUrl(),
+    val phoneControlHost: String = NetworkPreset.ZEROTIER.phoneIp,
     val developerModeEnabled: Boolean = false
-)
+) {
+    companion object {
+        fun fromPreset(preset: NetworkPreset, developerModeEnabled: Boolean = false): AppSettings {
+            return AppSettings(
+                networkPreset = preset,
+                cameraUrl = preset.getPhoneVideoUrl(),
+                orinTargetUrl = preset.getOrinTargetUrl(),
+                orinMediaUrl = preset.getOrinMediaUrl(),
+                phoneControlHost = preset.phoneIp,
+                developerModeEnabled = developerModeEnabled
+            )
+        }
+    }
+}

@@ -1,9 +1,53 @@
-# WiFi Wireless Access Guide
+# Network Access Guide
 
-## Prerequisites
-- Both phone and computer must be on the **same WiFi network**
-- WebSocket server running on phone (app started)
-- Port 9090 accessible (no firewall blocking)
+## Network Configurations
+
+The CamControl system supports two network presets:
+
+### 1. ZeroTier VPN Network (Default)
+Private VPN network for remote access over internet:
+- **Orin**: `192.168.100.150`
+- **Phone (S23+)**: `192.168.100.156`
+- **Tablet**: `192.168.100.159`
+
+### 2. T8Space WiFi Hotspot  
+Local WiFi network (phone hotspot):
+- **Orin**: `172.16.30.234`
+- **Phone (S23+)**: `172.16.30.28`
+- **Tablet**: `172.16.30.199`
+
+## Quick Start
+
+### On CamViewer (Android Tablet)
+
+1. Open **Settings** in CamViewer
+2. Select **Network Preset**:
+   - Choose "ZeroTier" for VPN access
+   - Choose "T8Space" for local WiFi
+3. URLs are automatically configured
+4. Tap **Save Settings**
+
+### On Orin (Jetson)
+
+```bash
+# Use ZeroTier (default)
+./start_all_services.sh
+
+# Or use T8Space
+NETWORK_CONFIG=t8space ./start_all_services.sh
+```
+
+### On Desktop (WebUI Access)
+
+**ZeroTier Network:**
+```
+http://192.168.100.156:9090
+```
+
+**T8Space Network:**
+```
+http://172.16.30.28:9090
+```
 
 ## Step 1: Find Your Phone's IP Address
 

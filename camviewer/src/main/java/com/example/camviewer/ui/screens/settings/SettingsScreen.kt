@@ -11,6 +11,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.camviewer.data.model.AppSettings
+import com.example.camviewer.data.model.NetworkPreset
 import com.example.camviewer.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,6 +37,12 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.updateSettings(settings)
         }
     }
+    
+    fun applyNetworkPreset(preset: NetworkPreset) {
+        viewModelScope.launch {
+            settingsRepository.applyNetworkPreset(preset)
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +52,8 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     
+    var selectedPreset by remember { mutableStateOf(settings.networkPreset) }
+    var showPresetMenu by remember { mutableStateOf(false) }
     var cameraUrl by remember { mutableStateOf(settings.cameraUrl) }
     var orinTargetUrl by remember { mutableStateOf(settings.orinTargetUrl) }
     var orinMediaUrl by remember { mutableStateOf(settings.orinMediaUrl) }
@@ -53,6 +62,7 @@ fun SettingsScreen(
     
     // Update local state when settings change
     LaunchedEffect(settings) {
+        selectedPreset = settings.networkPreset
         cameraUrl = settings.cameraUrl
         orinTargetUrl = settings.orinTargetUrl
         orinMediaUrl = settings.orinMediaUrl
@@ -73,6 +83,64 @@ fun SettingsScreen(
         
         Divider()
         
+        // Network Preset Section
+        Text(
+            text = "Network Preset",
+            style = MaterialTheme.typography.titleLarge
+        )
+        
+        ExposedDropdownMenuBox(
+            expanded = showPresetMenu,
+            onExpandedChange = { showPresetMenu = it }
+        ) {
+            OutlinedTextField(
+                value = selectedPreset.displayName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Network") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showPresetMenu) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+            )
+            
+            ExposedDropdownMenu(
+                expanded = showPresetMenu,
+                onDismissRequest = { showPresetMenu = false }
+            ) {
+                NetworkPreset.values().forEach { preset ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(preset.displayName)
+                                if (preset != NetworkPreset.CUSTOM) {
+                                    Text(
+                                        text = "Phone: ${preset.phoneIp}, Orin: ${preset.orinIp}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            selectedPreset = preset
+                            viewModel.applyNetworkPreset(preset)
+                            showPresetMenu = false
+                        }
+                    )
+                }
+            }
+        }
+        
+        Text(
+            text = "Select network configuration preset or use Custom for manual entry",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        Divider()
+        
         // Camera Connection Section
         Text(
             text = "Camera Connection",
@@ -81,11 +149,15 @@ fun SettingsScreen(
         
         OutlinedTextField(
             value = cameraUrl,
-            onValueChange = { cameraUrl = it },
+            onValueChange = { 
+                cameraUrl = it
+                selectedPreset = NetworkPreset.CUSTOM
+            },
             label = { Text("Camera WebSocket URL") },
-            placeholder = { Text("ws://172.16.30.28:9090") },
+            placeholder = { Text("ws://192.168.100.156:9090") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            enabled = selectedPreset == NetworkPreset.CUSTOM
         )
         
         Text(
@@ -104,20 +176,28 @@ fun SettingsScreen(
         
         OutlinedTextField(
             value = orinTargetUrl,
-            onValueChange = { orinTargetUrl = it },
+            onValueChange = { 
+                orinTargetUrl = it
+                selectedPreset = NetworkPreset.CUSTOM
+            },
             label = { Text("Target API URL") },
-            placeholder = { Text("http://172.16.30.234:8080") },
+            placeholder = { Text("http://192.168.100.150:8082") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            enabled = selectedPreset == NetworkPreset.CUSTOM
         )
         
         OutlinedTextField(
             value = orinMediaUrl,
-            onValueChange = { orinMediaUrl = it },
+            onValueChange = { 
+                orinMediaUrl = it
+                selectedPreset = NetworkPreset.CUSTOM
+            },
             label = { Text("Media API URL") },
-            placeholder = { Text("http://172.16.30.234:8081") },
+            placeholder = { Text("http://192.168.100.150:8081") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            enabled = selectedPreset == NetworkPreset.CUSTOM
         )
         
         Text(
@@ -162,6 +242,7 @@ fun SettingsScreen(
             onClick = {
                 viewModel.updateSettings(
                     AppSettings(
+                        networkPreset = selectedPreset,
                         cameraUrl = cameraUrl,
                         orinTargetUrl = orinTargetUrl,
                         orinMediaUrl = orinMediaUrl,
