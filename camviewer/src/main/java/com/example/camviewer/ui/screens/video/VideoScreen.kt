@@ -1,5 +1,9 @@
 package com.example.camviewer.ui.screens.video
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -7,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,7 +45,19 @@ fun VideoScreen(
     val telemetry by viewModel.telemetry.collectAsState()
     val latency by viewModel.latency.collectAsState()
     val developerModeEnabled by viewModel.developerModeEnabled.collectAsState(initial = false)
+    val isRecording by viewModel.isRecording.collectAsState()
     val scope = rememberCoroutineScope()
+    
+    // Storage permission for recording to public Movies folder
+    var hasStoragePermission by remember { mutableStateOf(true) }
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasStoragePermission = isGranted
+        if (isGranted) {
+            viewModel.toggleRecording()
+        }
+    }
     
     var videoSurfaceView by remember { mutableStateOf<VideoSurfaceView?>(null) }
     var tapPosition by remember { mutableStateOf<Offset?>(null) }
@@ -187,8 +204,10 @@ fun VideoScreen(
         // Connection status and controls (top-right, compact)
         ConnectionControls(
             connectionState = connectionState,
+            isRecording = isRecording,
             onConnect = { viewModel.connect() },
             onDisconnect = { viewModel.disconnect() },
+            onToggleRecording = { viewModel.toggleRecording() },
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(8.dp)
@@ -334,8 +353,10 @@ fun TelemetryOverlay(
 @Composable
 fun ConnectionControls(
     connectionState: ConnectionState,
+    isRecording: Boolean,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
+    onToggleRecording: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -395,6 +416,21 @@ fun ConnectionControls(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+                }
+            }
+            
+            // Record button (only shown when connected)
+            if (connectionState is ConnectionState.Connected) {
+                IconButton(
+                    onClick = onToggleRecording,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.RadioButtonChecked,
+                        contentDescription = if (isRecording) "Stop Recording" else "Start Recording",
+                        tint = if (isRecording) Color.Red else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }

@@ -12,6 +12,7 @@ import com.example.camviewer.network.CamControlWebSocketClient
 import com.example.camviewer.network.OrinTargetClient
 import com.example.camviewer.network.PhoneCameraClient
 import com.example.camviewer.video.VideoDecoder
+import com.example.camviewer.video.VideoRecorder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -28,6 +29,7 @@ private const val TAG = "VideoViewModel"
 class VideoViewModel @Inject constructor(
     private val webSocketClient: CamControlWebSocketClient,
     private val videoDecoder: VideoDecoder,
+    private val videoRecorder: VideoRecorder,
     private val settingsRepository: SettingsRepository,
     private val orinTargetClient: OrinTargetClient,
     private val phoneCameraClient: PhoneCameraClient
@@ -38,6 +40,12 @@ class VideoViewModel @Inject constructor(
     
     private val _latency = MutableStateFlow(0L)
     val latency: StateFlow<Long> = _latency.asStateFlow()
+    
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+    
+    private val _recordingFile = MutableStateFlow<String?>(null)
+    val recordingFile: StateFlow<String?> = _recordingFile.asStateFlow()
     
     private var decodingJob: Job? = null
     private var surface: Surface? = null
@@ -125,6 +133,11 @@ class VideoViewModel @Inject constructor(
                     // Calculate latency
                     val now = System.currentTimeMillis()
                     _latency.value = now - frame.timestamp
+                    
+                    // Write frame to recorder if recording
+                    if (_isRecording.value) {
+                        videoRecorder.writeFrame(frame.data)
+                    }
                     
                     // Decode frame
                     val timestampUs = frame.timestamp * 1000 // Convert ms to us
@@ -287,6 +300,74 @@ class VideoViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting codec", e)
             }
+        }
+    }
+    
+    /**
+     * Start recording video to file
+     */
+    fun startRecording() {
+        if (_isRecording.value) {
+            Log.w(TAG, "Already recording")
+            return
+        }
+        
+        viewModelScope.launch {
+            try {
+                // Determine codec from current stream (default to h265)
+                val codec = "h265" // TODO: Track actual codec from stream
+                val filePath = videoRecorder.startRecording(codec)
+                if (filePath != null) {
+                    _isRecording.value = true
+                    _recordingFile.value = filePath
+                    Log.i(TAG, "Started recording to: $filePath")
+                } else {
+                    Log.e(TAG, "Failed to start recording")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting recording", e)
+            }
+        }
+    }
+    
+    /**
+     * Stop recording video
+     */
+    fun stopRecording() {
+        if (!_isRecording.value) {
+            Log.w(TAG, "Not recording")
+            return
+        }
+        
+        viewModelScope.launch {
+            try {
+                val result = videoRecorder.stopRecording()
+                _isRecording.value = false
+                
+                if (result != null) {
+                    val (filePath, bytes) = result
+                    Log.i(TAG, "Stopped recording: $filePath (${bytes / 1024 / 1024} MB)")
+                    _recordingFile.value = filePath
+                } else {
+                    _recordingFile.value = null
+                    Log.e(TAG, "Failed to stop recording")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping recording", e)
+                _isRecording.value = false
+                _recordingFile.value = null
+            }
+        }
+    }
+    
+    /**
+     * Toggle recording on/off
+     */
+    fun toggleRecording() {
+        if (_isRecording.value) {
+            stopRecording()
+        } else {
+            startRecording()
         }
     }
     
