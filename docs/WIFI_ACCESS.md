@@ -37,6 +37,11 @@ Once you have the phone's IP (e.g., `192.168.1.100`):
 http://192.168.1.100:9090
 ```
 
+### WebSocket Endpoints
+- **WebUI**: `http://192.168.1.100:9090/` (main page)
+- **Video Stream**: `ws://192.168.1.100:9090/` (WebSocket binary)
+- **Control Commands**: `ws://192.168.1.100:9090/control` (WebSocket JSON)
+
 ### Update Host in WebUI
 1. Open `http://192.168.1.100:9090`
 2. In the top bar, the **Host** field shows the current IP

@@ -1,15 +1,26 @@
 # Orin Target API Specification
 
+**Status**: ✅ Implemented and Operational  
+**Last Updated**: November 13, 2025  
+**Implementation**: `orin/target_api.py`
+
 ## Overview
-This document specifies the API that needs to be implemented on the Orin device to receive target selection coordinates from the CamViewer Android app.
+This document specifies the Target API implemented on the Orin device (port 8082) to receive target selection coordinates from the CamViewer Android app and publish them to ROS2.
+
+**Network Architecture**:
+- **Phone WebSocket**: Port 9090 (video + control commands)
+- **Orin Target API**: Port 8082 (HTTP REST - target selection)
+- **Orin Media API**: Port 8081 (HTTP REST - media management)
 
 ## Server Requirements
 
 ### Base Configuration
 - **Host**: `0.0.0.0` (listen on all interfaces)
-- **Port**: `8080`
+- **Port**: `8082` (Target API)
 - **Protocol**: HTTP/REST
 - **Content-Type**: `application/json`
+
+**Note**: This is separate from the phone's WebSocket server on port 9090.
 
 ### Recommended Implementation
 - **Framework**: FastAPI (Python)
