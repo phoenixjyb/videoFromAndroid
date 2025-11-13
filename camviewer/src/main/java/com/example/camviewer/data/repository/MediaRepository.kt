@@ -64,9 +64,10 @@ class MediaRepository @Inject constructor(
 
     /**
      * Get downloads directory (permanent storage)
+     * Changed to public /sdcard/Movies/syncRecomo/ for easy access
      */
     private fun getDownloadsDir(): File {
-        val downloadsDir = File(context.getExternalFilesDir(null), "Downloads")
+        val downloadsDir = File("/sdcard/Movies/syncRecomo")
         if (!downloadsDir.exists()) {
             downloadsDir.mkdirs()
         }

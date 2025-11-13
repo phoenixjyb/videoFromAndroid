@@ -28,6 +28,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -41,6 +42,11 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
+enum class MediaTab {
+    LOCAL_RECORDINGS,
+    SYNCED_VIDEOS
+}
+
 @Composable
 fun MediaScreen(
     viewModel: MediaViewModel = hiltViewModel(),
@@ -49,14 +55,23 @@ fun MediaScreen(
     val uiState by viewModel.uiState.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val refreshTrigger by viewModel.refreshTrigger.collectAsState() // Trigger UI updates
+    val localRecordings by viewModel.localRecordings.collectAsState()
     var selectedMedia by remember { mutableStateOf<MediaItem?>(null) }
     var mediaToDelete by remember { mutableStateOf<MediaItem?>(null) }
+    var selectedTab by remember { mutableStateOf(MediaTab.LOCAL_RECORDINGS) }
     
     Scaffold(
         topBar = {
             MediaTopBar(
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it },
                 onNavigateBack = onNavigateBack,
-                onRefresh = { viewModel.refresh() }
+                onRefresh = { 
+                    when (selectedTab) {
+                        MediaTab.LOCAL_RECORDINGS -> viewModel.refreshLocalRecordings()
+                        MediaTab.SYNCED_VIDEOS -> viewModel.refresh()
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -65,50 +80,51 @@ fun MediaScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when (val state = uiState) {
-                is MediaUiState.Loading -> {
-                    LoadingContent()
+            when (selectedTab) {
+                MediaTab.LOCAL_RECORDINGS -> {
+                    // Show local recordings from /sdcard/Movies/recomoVideosRawStream/
+                    LocalRecordingsContent(
+                        recordings = localRecordings,
+                        onMediaClick = { /* TODO: Play local video */ },
+                        onDeleteClick = { viewModel.deleteLocalRecording(it) },
+                        onRefresh = { viewModel.refreshLocalRecordings() }
+                    )
                 }
-                is MediaUiState.Empty -> {
-                    EmptyContent(onRefresh = { viewModel.refresh() })
-                }
-                is MediaUiState.Success -> {
-                    MediaGrid(
-                        items = state.items,
-                        downloadProgress = downloadProgress,
-                        onMediaClick = { mediaItem ->
-                            android.util.Log.e("MediaScreen", "onMediaClick called for: ${mediaItem.filename}")
-                            // Only play if downloaded
-                            if (viewModel.isMediaDownloaded(mediaItem)) {
-                                android.util.Log.e("MediaScreen", "Video is downloaded, playing...")
-                                selectedMedia = mediaItem
-                            } else {
-                                android.util.Log.e("MediaScreen", "Video NOT downloaded, ignoring click")
-                            }
-                        },
-                        onDownloadClick = { mediaItem ->
-                            android.util.Log.e("MediaScreen", ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-                            android.util.Log.e("MediaScreen", "onDownloadClick LAMBDA called!")
-                            android.util.Log.e("MediaScreen", "File: ${mediaItem.filename}")
-                            android.util.Log.e("MediaScreen", "Calling viewModel.downloadMedia()...")
-                            viewModel.downloadMedia(mediaItem)
-                            android.util.Log.e("MediaScreen", "viewModel.downloadMedia() returned")
-                            android.util.Log.e("MediaScreen", ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-                        },
-                        onDeleteClick = { mediaItem ->
-                            android.util.Log.d("MediaScreen", "Long press detected, showing delete confirmation for: ${mediaItem.filename}")
-                            mediaToDelete = mediaItem
-                        },
-                        isDownloaded = { mediaItem ->
-                            viewModel.isMediaDownloaded(mediaItem)
+                MediaTab.SYNCED_VIDEOS -> {
+                    // Show synced videos from Orin
+                    when (val state = uiState) {
+                        is MediaUiState.Loading -> {
+                            LoadingContent()
                         }
-                    )
-                }
-                is MediaUiState.Error -> {
-                    ErrorContent(
-                        message = state.message,
-                        onRetry = { viewModel.clearError() }
-                    )
+                        is MediaUiState.Empty -> {
+                            EmptyContent(onRefresh = { viewModel.refresh() })
+                        }
+                        is MediaUiState.Success -> {
+                            MediaGrid(
+                                items = state.items,
+                                downloadProgress = downloadProgress,
+                                onMediaClick = { mediaItem ->
+                                    android.util.Log.e("MediaScreen", "onMediaClick called for: ${mediaItem.filename}")
+                                    selectedMedia = mediaItem
+                                },
+                                onDownloadClick = { mediaItem ->
+                                    viewModel.downloadMedia(mediaItem)
+                                },
+                                onDeleteClick = { mediaItem ->
+                                    mediaToDelete = mediaItem
+                                },
+                                isDownloaded = { mediaItem ->
+                                    viewModel.isMediaDownloaded(mediaItem)
+                                }
+                            )
+                        }
+                        is MediaUiState.Error -> {
+                            ErrorContent(
+                                message = state.message,
+                                onRetry = { viewModel.refresh() }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -152,22 +168,45 @@ fun MediaScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaTopBar(
+    selectedTab: MediaTab,
+    onTabSelected: (MediaTab) -> Unit,
     onNavigateBack: () -> Unit,
     onRefresh: () -> Unit
 ) {
-    TopAppBar(
-        title = { Text("Media Gallery") },
-        navigationIcon = {
-            IconButton(onClick = onNavigateBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+    Column {
+        TopAppBar(
+            title = { Text("Media Gallery") },
+            navigationIcon = {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                }
+            },
+            actions = {
+                IconButton(onClick = onRefresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                }
             }
-        },
-        actions = {
-            IconButton(onClick = onRefresh) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-            }
+        )
+        
+        // Tab Row
+        TabRow(
+            selectedTabIndex = selectedTab.ordinal,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Tab(
+                selected = selectedTab == MediaTab.LOCAL_RECORDINGS,
+                onClick = { onTabSelected(MediaTab.LOCAL_RECORDINGS) },
+                text = { Text("Local Recordings") },
+                icon = { Icon(Icons.Default.Phone, contentDescription = "Local") }
+            )
+            Tab(
+                selected = selectedTab == MediaTab.SYNCED_VIDEOS,
+                onClick = { onTabSelected(MediaTab.SYNCED_VIDEOS) },
+                text = { Text("Synced from Orin") },
+                icon = { Icon(Icons.Default.CloudDownload, contentDescription = "Synced") }
+            )
         }
-    )
+    }
 }
 
 @Composable
@@ -433,7 +472,10 @@ fun LoadingContent() {
 }
 
 @Composable
-fun EmptyContent(onRefresh: () -> Unit) {
+fun EmptyContent(
+    message: String = "No media found\nMedia will appear here once recorded",
+    onRefresh: () -> Unit
+) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -449,13 +491,10 @@ fun EmptyContent(onRefresh: () -> Unit) {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "No media found",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = "Media will appear here once recorded",
+                text = message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Button(onClick = onRefresh) {
                 Icon(Icons.Default.Refresh, contentDescription = null)
@@ -612,6 +651,109 @@ fun VideoPlayerDialog(
                         tint = Color.White
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun LocalRecordingsContent(
+    recordings: List<File>,
+    onMediaClick: (File) -> Unit,
+    onDeleteClick: (File) -> Unit,
+    onRefresh: () -> Unit
+) {
+    if (recordings.isEmpty()) {
+        EmptyContent(
+            message = "No local recordings yet.\nPress the record button while viewing video to save.",
+            onRefresh = onRefresh
+        )
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 150.dp),
+            contentPadding = PaddingValues(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(recordings, key = { it.absolutePath }) { file ->
+                LocalRecordingCard(
+                    file = file,
+                    onClick = { onMediaClick(file) },
+                    onDeleteClick = { onDeleteClick(file) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LocalRecordingCard(
+    file: File,
+    onClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Box {
+            // Video thumbnail placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            
+            // File info overlay
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomStart)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                        )
+                    )
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = file.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${file.length() / 1024 / 1024} MB",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+            }
+            
+            // Delete button
+            IconButton(
+                onClick = onDeleteClick,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = Color.White
+                )
             }
         }
     }

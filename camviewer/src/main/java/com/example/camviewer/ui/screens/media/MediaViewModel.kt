@@ -7,6 +7,7 @@ import com.example.camviewer.data.model.MediaFilter
 import com.example.camviewer.data.model.MediaItem
 import com.example.camviewer.data.repository.MediaRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -63,6 +64,10 @@ class MediaViewModel @Inject constructor(
     // Refresh trigger - increments to force UI recomposition
     private val _refreshTrigger = MutableStateFlow(0)
     val refreshTrigger: StateFlow<Int> = _refreshTrigger.asStateFlow()
+    
+    // Local recordings from /sdcard/Movies/recomoVideosRawStream/
+    private val _localRecordings = MutableStateFlow<List<File>>(emptyList())
+    val localRecordings: StateFlow<List<File>> = _localRecordings.asStateFlow()
 
     // UI State
     private val _uiState = MutableStateFlow<MediaUiState>(MediaUiState.Empty)
@@ -86,6 +91,50 @@ class MediaViewModel @Inject constructor(
     init {
         // Load media on initialization
         loadMedia()
+        refreshLocalRecordings()
+    }
+    
+    /**
+     * Refresh local recordings from /sdcard/Movies/recomoVideosRawStream/
+     */
+    fun refreshLocalRecordings() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val recordingsDir = File("/sdcard/Movies/recomoVideosRawStream")
+                if (recordingsDir.exists() && recordingsDir.isDirectory) {
+                    val files = recordingsDir.listFiles()
+                        ?.filter { it.extension == "mp4" }
+                        ?.sortedByDescending { it.lastModified() }
+                        ?: emptyList()
+                    _localRecordings.value = files
+                    Log.d(TAG, "Found ${files.size} local recordings")
+                } else {
+                    _localRecordings.value = emptyList()
+                    Log.d(TAG, "Local recordings directory does not exist")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading local recordings", e)
+                _localRecordings.value = emptyList()
+            }
+        }
+    }
+    
+    /**
+     * Delete a local recording file
+     */
+    fun deleteLocalRecording(file: File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (file.exists() && file.delete()) {
+                    Log.d(TAG, "Deleted local recording: ${file.name}")
+                    refreshLocalRecordings()
+                } else {
+                    Log.e(TAG, "Failed to delete: ${file.name}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error deleting local recording", e)
+            }
+        }
     }
 
     /**
