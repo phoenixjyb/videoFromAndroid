@@ -13,14 +13,22 @@ import kotlinx.serialization.json.Json
 /**
  * Client for sending camera control commands to phone's WebSocket server
  * Connects to the camControl app running on the phone (SM-S9280)
- * Mirrors the command format from camControl app's ControlCommand.kt
+ * 
+ * IMPORTANT: Command format must match phone's expectation:
+ * - Uses "cmd" as discriminator field (not "type")
+ * - Command names: "zoom", "ae_lock", "awb_lock", "switch", "bitrate", "codec", etc.
  */
 class PhoneCameraClient(
     private val httpClient: HttpClient,
     private val json: Json
 ) {
     private val TAG = "PhoneCameraClient"
-    private val commandChannel = Channel<CameraCommand>(Channel.UNLIMITED)
+    
+    // Json with "cmd" discriminator to match phone app
+    private val commandJson = Json {
+        classDiscriminator = "cmd"
+        ignoreUnknownKeys = true
+    }
     
     /**
      * Send camera control command via WebSocket
@@ -28,8 +36,8 @@ class PhoneCameraClient(
      */
     suspend fun sendCommand(phoneHost: String, command: CameraCommand): Result<Unit> {
         return try {
-            val jsonCommand = json.encodeToString(command)
-            Log.d(TAG, "Sending command to $phoneHost:9090: $jsonCommand")
+            val jsonCommand = commandJson.encodeToString(command)
+            Log.d(TAG, "Sending command to $phoneHost:9090/control: $jsonCommand")
             
             // Connect to phone's WebSocket server and send command
             httpClient.webSocket(
@@ -72,47 +80,43 @@ class PhoneCameraClient(
     
     suspend fun requestKeyFrame(phoneHost: String) =
         sendCommand(phoneHost, CameraCommand.RequestKeyFrame)
-}
 
-/**
- * Camera control commands - matches the format from camControl app
- */
-@Serializable
-sealed class CameraCommand {
+    /**
+     * Camera control commands - matches the phone app's format
+     * Uses "cmd" as discriminator field with specific command names
+     */
     @Serializable
-    @SerialName("setZoomRatio")
-    data class SetZoomRatio(val value: Float) : CameraCommand()
-    
-    @Serializable
-    @SerialName("setAeLock")
-    data class SetAeLock(val value: Boolean) : CameraCommand()
-    
-    @Serializable
-    @SerialName("setAwbLock")
-    data class SetAwbLock(val value: Boolean) : CameraCommand()
-    
-    @Serializable
-    @SerialName("switchCamera")
-    data class SwitchCamera(val facing: String) : CameraCommand()
-    
-    @Serializable
-    @SerialName("setBitrate")
-    data class SetBitrate(val bitrate: Int) : CameraCommand()
-    
-    @Serializable
-    @SerialName("setCodec")
-    data class SetCodec(val codec: String) : CameraCommand()
-    
-    @Serializable
-    @SerialName("setVideoProfile")
-    data class SetVideoProfile(
-        val width: Int,
-        val height: Int,
-        val fps: Int,
-        val highSpeed: Boolean = false
-    ) : CameraCommand()
-    
-    @Serializable
-    @SerialName("requestKeyFrame")
-    object RequestKeyFrame : CameraCommand()
+    sealed class CameraCommand {
+        @Serializable
+        @SerialName("setZoomRatio")
+        data class SetZoomRatio(val value: Float) : CameraCommand()
+        
+        @Serializable
+        @SerialName("setAeLock")
+        data class SetAeLock(val value: Boolean) : CameraCommand()
+        
+        @Serializable
+        @SerialName("setAwbLock")
+        data class SetAwbLock(val value: Boolean) : CameraCommand()
+        
+        @Serializable
+        @SerialName("switchCamera")
+        data class SwitchCamera(val facing: String) : CameraCommand()  // "back" or "front"
+        
+        @Serializable
+        @SerialName("setBitrate")
+        data class SetBitrate(val bitrate: Int) : CameraCommand()  // Bitrate in bits per second
+        
+        @Serializable
+        @SerialName("setCodec")
+        data class SetCodec(val codec: String) : CameraCommand()  // "h264" or "h265"
+        
+        @Serializable
+        @SerialName("setVideoProfile")
+        data class SetVideoProfile(val width: Int, val height: Int, val fps: Int, val highSpeed: Boolean = false) : CameraCommand()
+        
+        @Serializable
+        @SerialName("requestKeyFrame")
+        object RequestKeyFrame : CameraCommand()
+    }
 }
