@@ -31,6 +31,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideJson(): Json = Json {
+        classDiscriminator = "cmd"  // Must match phone's ControlServer expectation
         ignoreUnknownKeys = true
         prettyPrint = true
         isLenient = true

@@ -48,7 +48,7 @@ class CameraControlRelay(Node):
     to the phone's camControl app via WebSocket
     """
     
-    def __init__(self, phone_host: str, phone_port: int = 8080):
+    def __init__(self, phone_host: str, phone_port: int = 9090):
         super().__init__('camera_control_relay')
         
         self.phone_host = phone_host
@@ -147,7 +147,7 @@ class CameraControlRelay(Node):
         """Handle zoom command"""
         self.get_logger().info(f'🔍 Zoom: {msg.data}x')
         command = {
-            'type': 'setZoomRatio',
+            'cmd': 'setZoomRatio',
             'value': float(msg.data)
         }
         self.command_queue.put(command)
@@ -156,7 +156,7 @@ class CameraControlRelay(Node):
         """Handle AE lock command"""
         self.get_logger().info(f'☀️ AE Lock: {msg.data}')
         command = {
-            'type': 'setAeLock',
+            'cmd': 'setAeLock',
             'value': bool(msg.data)
         }
         self.command_queue.put(command)
@@ -165,7 +165,7 @@ class CameraControlRelay(Node):
         """Handle AWB lock command"""
         self.get_logger().info(f'📷 AWB Lock: {msg.data}')
         command = {
-            'type': 'setAwbLock',
+            'cmd': 'setAwbLock',
             'value': bool(msg.data)
         }
         self.command_queue.put(command)
@@ -174,7 +174,7 @@ class CameraControlRelay(Node):
         """Handle camera switch command"""
         self.get_logger().info(f'🔄 Switch camera: {msg.data}')
         command = {
-            'type': 'switchCamera',
+            'cmd': 'switchCamera',
             'facing': msg.data
         }
         self.command_queue.put(command)
@@ -183,7 +183,7 @@ class CameraControlRelay(Node):
         """Handle bitrate command"""
         self.get_logger().info(f'📊 Bitrate: {msg.data / 1000000}Mbps')
         command = {
-            'type': 'setBitrate',
+            'cmd': 'setBitrate',
             'bitrate': int(msg.data)
         }
         self.command_queue.put(command)
@@ -192,7 +192,7 @@ class CameraControlRelay(Node):
         """Handle codec command"""
         self.get_logger().info(f'🎬 Codec: {msg.data}')
         command = {
-            'type': 'setCodec',
+            'cmd': 'setCodec',
             'codec': msg.data
         }
         self.command_queue.put(command)
@@ -201,7 +201,7 @@ class CameraControlRelay(Node):
         """Handle key frame request"""
         self.get_logger().info(f'🔑 Request key frame')
         command = {
-            'type': 'requestKeyFrame'
+            'cmd': 'requestKeyFrame'
         }
         self.command_queue.put(command)
 

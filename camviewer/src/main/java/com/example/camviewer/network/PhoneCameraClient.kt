@@ -24,17 +24,17 @@ class PhoneCameraClient(
     
     /**
      * Send camera control command via WebSocket
-     * Commands are sent as JSON to ws://<phone-ip>:8080
+     * Commands are sent as JSON to ws://<phone-ip>:9090/control
      */
     suspend fun sendCommand(phoneHost: String, command: CameraCommand): Result<Unit> {
         return try {
             val jsonCommand = json.encodeToString(command)
-            Log.d(TAG, "Sending command to $phoneHost:8080: $jsonCommand")
+            Log.d(TAG, "Sending command to $phoneHost:9090: $jsonCommand")
             
             // Connect to phone's WebSocket server and send command
             httpClient.webSocket(
                 host = phoneHost,
-                port = 8080,
+                port = 9090,
                 path = "/control"
             ) {
                 // Send the command as text frame
