@@ -12,7 +12,7 @@ Monitors Android logcat for application-specific logs.
 ./tools/quick_logs.sh
 ```
 
-**Note:** The ROS2 publisher quick start script has been moved to `orin/start_ros2_publisher.sh`.
+**Note:** The phone-to-ROS2 bridge script has been moved to `orin/start_phone_ros2_bridge.sh`.
 
 ## See Also
 
@@ -21,4 +21,4 @@ Monitors Android logcat for application-specific logs.
 - `/orin/` - ROS2 integration tools and service management
   - `start_all_services.sh` - Start all Orin services (target API, media API, camera relay)
   - `stop_all_services.sh` - Stop all Orin services
-  - `start_ros2_publisher.sh` - Start ROS2 image publisher with ADB forwarding
+  - `start_phone_ros2_bridge.sh` - Bridge phone video/controls to ROS2 topics (with ADB forwarding)
