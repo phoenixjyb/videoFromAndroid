@@ -14,7 +14,7 @@ adb shell ip addr show wlan0 | grep 'inet ' | awk '{print $2}' | cut -d/ -f1
 
 ### Method B: On Android Phone
 1. Open **Settings** → **About phone** → **Status**
-2. Look for **IP address** (e.g., `192.168.1.100`)
+2. Look for **IP address** (e.g., `172.16.30.28`)
 
 **OR**
 
@@ -30,20 +30,20 @@ adb shell "ip -o -4 addr show wlan0 | awk '{print \$4}' | cut -d/ -f1"
 
 ## Step 2: Access WebUI Wirelessly
 
-Once you have the phone's IP (e.g., `192.168.1.100`):
+Once you have the phone's IP (e.g., `172.16.30.28`):
 
 ### In Web Browser
 ```
-http://192.168.1.100:9090
+http://172.16.30.28:9090
 ```
 
 ### WebSocket Endpoints
-- **WebUI**: `http://192.168.1.100:9090/` (main page)
-- **Video Stream**: `ws://192.168.1.100:9090/` (WebSocket binary)
-- **Control Commands**: `ws://192.168.1.100:9090/control` (WebSocket JSON)
+- **WebUI**: `http://172.16.30.28:9090/` (main page)
+- **Video Stream**: `ws://172.16.30.28:9090/` (WebSocket binary)
+- **Control Commands**: `ws://172.16.30.28:9090/control` (WebSocket JSON)
 
 ### Update Host in WebUI
-1. Open `http://192.168.1.100:9090`
+1. Open `http://172.16.30.28:9090`
 2. In the top bar, the **Host** field shows the current IP
 3. WebUI automatically detects and uses the correct IP
 
@@ -51,10 +51,10 @@ http://192.168.1.100:9090
 
 ```bash
 # From your computer, test if port 9090 is reachable
-curl http://192.168.1.100:9090/
+curl http://172.16.30.28:9090/
 
 # Or test WebSocket connectivity
-wscat -c ws://192.168.1.100:9090/control
+wscat -c ws://172.16.30.28:9090/control
 ```
 
 ## Troubleshooting
@@ -74,7 +74,7 @@ wscat -c ws://192.168.1.100:9090/control
 3. **Test port accessibility**:
    ```bash
    # From computer
-   nc -zv 192.168.1.100 9090
+   nc -zv 172.16.30.28 9090
    ```
 
 4. **Firewall**: Android may block incoming connections
@@ -88,7 +88,7 @@ If you have VPN running:
 ```bash
 # Temporarily disable VPN or add exception for local network
 # For macOS/Linux, you can bypass proxy:
-export NO_PROXY="192.168.0.0/16,127.0.0.1,localhost"
+export NO_PROXY="172.16.0.0/12,192.168.0.0/16,127.0.0.1,localhost"
 
 # Or disable VPN entirely for testing
 ```
