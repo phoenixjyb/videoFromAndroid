@@ -17,6 +17,7 @@ import asyncio
 import subprocess
 import os
 import sys
+import socket
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -93,6 +94,30 @@ def is_process_running(pid: int) -> bool:
     except (OSError, ProcessLookupError):
         return False
 
+def is_port_listening(port: int) -> bool:
+    """Check if a port is listening (for HTTP services)"""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.5)
+            result = sock.connect_ex(('localhost', port))
+            return result == 0
+    except Exception:
+        return False
+
+def is_ros2_node_healthy(pid: int, node_name: str = 'camera_control_relay') -> bool:
+    """Check if ROS2 node is actually running and healthy"""
+    if not is_process_running(pid):
+        return False
+    
+    try:
+        # Check if the process command line matches
+        with open(f'/proc/{pid}/cmdline', 'r') as f:
+            cmdline = f.read()
+            return 'camera_control_relay.py' in cmdline
+    except Exception:
+        # Fallback: if we can't read cmdline, trust the PID check
+        return True
+
 def get_service_status(service_id: str, config: dict) -> ServiceStatus:
     """Get status of a single service"""
     pid = None
@@ -104,7 +129,15 @@ def get_service_status(service_id: str, config: dict) -> ServiceStatus:
     if config["pid_file"].exists():
         try:
             pid = int(config["pid_file"].read_text().strip())
-            running = is_process_running(pid)
+            
+            # Enhanced health check based on service type
+            if config["port"] is not None:
+                # HTTP service: check both process and port
+                running = is_process_running(pid) and is_port_listening(config["port"])
+            else:
+                # ROS2 node: check process and verify it's the right one
+                running = is_ros2_node_healthy(pid)
+            
             if not running:
                 pid = None
         except (ValueError, IOError):
