@@ -18,6 +18,8 @@ Remote-control Android phone camera with real-time H.265 video streaming and thr
 - 🎯 **Target tracking** - ROI selection, bounding box visualization, coordinate transforms
 - 💾 **Media management** - Browse, download, delete recorded videos via API
 - 📹 **On-device recording** - Accurate timestamps, 4K support, auto file retrieval
+- 📼 **Local recording** - CamViewer tablet can record live streams to MP4
+- 📂 **Dual gallery** - View local recordings and synced videos from Orin
 - 🌐 **Multi-client streaming** - Broadcast to multiple viewers simultaneously
 - 🔧 **Developer mode** - Tablet app with visual camera control overlay
 
@@ -170,7 +172,10 @@ camviewer/                   # CamViewer tablet app (viewer + controls)
     MainActivity.kt          # Video display + dev controls
     network/PhoneCameraClient.kt  # WebSocket client
     video/VideoDecoder.kt    # MediaCodec H.265 decoder (default)
+    video/VideoRecorder.kt   # MP4 recording with MediaMuxer
     ui/screens/video/        # Video display + control panel
+    ui/screens/media/        # Gallery with two tabs (local/synced)
+    data/repository/MediaRepository.kt  # Media sync from Orin
 
 orin/                        # Jetson Orin ROS2 integration
   camera_control_relay.py    # ROS2 topics → WebSocket commands
@@ -247,6 +252,37 @@ cd orin/
 **Test Controls:**
 ```bash
 ./orin/test_camera_control.sh
+```
+
+## CamViewer Recording & Gallery
+
+**Recording Live Streams (Tablet):**
+- Press the record button while viewing video
+- H.265 stream recorded directly to MP4 with MediaMuxer
+- Files saved to `/sdcard/Movies/recomoVideosRawStream/`
+- Recordings include proper CSD (VPS/SPS/PPS) for H.265 playback
+
+**Gallery with Two Tabs:**
+
+1. **Local Recordings Tab**
+   - Shows videos recorded on the tablet
+   - Location: `/sdcard/Movies/recomoVideosRawStream/`
+   - Direct access from Files app
+   - Delete recordings from gallery
+
+2. **Synced from Orin Tab**
+   - Shows videos downloaded from Orin server
+   - Location: `/sdcard/Movies/syncRecomo/`
+   - Browse media from Orin's API
+   - Download and manage synced videos
+
+**Storage Locations:**
+```bash
+# Tablet local recordings
+/sdcard/Movies/recomoVideosRawStream/
+
+# Videos synced from Orin
+/sdcard/Movies/syncRecomo/
 ```
 
 ## Development History
@@ -353,6 +389,10 @@ cd orin/
 ## Changelog
 
 ### November 2025
+- **13 Nov**: Added MP4 recording feature to CamViewer with MediaMuxer
+- **13 Nov**: Implemented dual-tab gallery (Local Recordings + Synced from Orin)
+- **13 Nov**: Changed storage to public folders (`/sdcard/Movies/recomoVideosRawStream/`, `/sdcard/Movies/syncRecomo/`)
+- **13 Nov**: Fixed H.265 keyframe detection (NAL type extraction) for proper CSD
 - **13 Nov**: Added pre-built APKs to repository for deployment convenience
 - **13 Nov**: Set H.265 (HEVC) as default codec across all components
 - **12 Nov**: Fixed JSON discriminator from `"type"` to `"cmd"` for phone compatibility

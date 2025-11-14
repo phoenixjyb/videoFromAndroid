@@ -2,6 +2,7 @@ package com.example.camviewer.ui.navigation
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
@@ -21,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.camviewer.ui.screens.media.MediaScreen
 import com.example.camviewer.ui.screens.settings.SettingsScreen
 import com.example.camviewer.ui.screens.video.VideoScreen
+import com.example.camviewer.ui.orin.OrinControlScreen
 
 data class NavigationItem(
     val screen: Screen,
@@ -38,6 +40,7 @@ fun CamViewerNavHost() {
     val navigationItems = listOf(
         NavigationItem(Screen.Video, Icons.Default.Videocam, "Video"),
         NavigationItem(Screen.Media, Icons.Default.VideoLibrary, "Media"),
+        NavigationItem(Screen.OrinControl, Icons.Default.Computer, "Orin"),
         NavigationItem(Screen.Settings, Icons.Default.Settings, "Settings")
     )
     
@@ -54,6 +57,9 @@ fun CamViewerNavHost() {
                 }
                 composable(Screen.Media.route) {
                     MediaScreen()
+                }
+                composable(Screen.OrinControl.route) {
+                    OrinControlScreen()
                 }
                 composable(Screen.Settings.route) {
                     SettingsScreen()
