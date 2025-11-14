@@ -33,6 +33,10 @@ __pycache__/
 *.wav
 clip-*.mp4
 
+# PID files (runtime state, should not be tracked)
+*.pid
+.*.pid
+
 # Test outputs and saved data
 /saved_images/
 /saved_videos/
