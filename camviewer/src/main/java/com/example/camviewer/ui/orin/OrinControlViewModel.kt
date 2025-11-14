@@ -99,11 +99,15 @@ class OrinControlViewModel @Inject constructor(
             
             result.onSuccess { response ->
                 Log.d(TAG, "Services started successfully: ${response.message}")
+                Log.d(TAG, "Service status: ${response.services}")
                 // Wait a bit and refresh to show updated status
                 delay(2000)
                 refreshStatus()
             }.onFailure { error ->
-                Log.e(TAG, "Failed to start services: ${error.message}")
+                Log.e(TAG, "Failed to start services: ${error.message}", error)
+                Log.e(TAG, "Error type: ${error.javaClass.name}")
+                Log.e(TAG, "Stack trace:", error)
+                _uiState.update { it.copy(error = "Start failed: ${error.message}") }
             }
         }
     }
@@ -127,11 +131,15 @@ class OrinControlViewModel @Inject constructor(
             
             result.onSuccess { response ->
                 Log.d(TAG, "Services stopped successfully: ${response.message}")
+                Log.d(TAG, "Service status: ${response.services}")
                 // Wait a bit and refresh to show updated status
                 delay(2000)
                 refreshStatus()
             }.onFailure { error ->
-                Log.e(TAG, "Failed to stop services: ${error.message}")
+                Log.e(TAG, "Failed to stop services: ${error.message}", error)
+                Log.e(TAG, "Error type: ${error.javaClass.name}")
+                Log.e(TAG, "Stack trace:", error)
+                _uiState.update { it.copy(error = "Stop failed: ${error.message}") }
             }
         }
     }

@@ -116,13 +116,17 @@ class OrinServiceRepository @Inject constructor(
             val settings = settingsRepository.settings.first()
             
             Log.d(TAG, "Starting services at: $url")
+            Log.d(TAG, "PIN configured: ${settings.serviceControlPin.isNotEmpty()}")
             
             val response = client.post(url) {
                 // Include PIN in header if set
                 if (settings.serviceControlPin.isNotEmpty()) {
                     header("X-Service-PIN", settings.serviceControlPin)
+                    Log.d(TAG, "PIN header added")
                 }
             }
+            
+            Log.d(TAG, "Response status: ${response.status.value} ${response.status.description}")
             
             if (response.status.isSuccess()) {
                 val controlResponse: ServiceControlResponse = response.body()
@@ -139,6 +143,8 @@ class OrinServiceRepository @Inject constructor(
             val errorMsg = "Failed to start services: ${e.message}"
             _error.value = errorMsg
             Log.e(TAG, errorMsg, e)
+            Log.e(TAG, "Exception type: ${e.javaClass.name}")
+            Log.e(TAG, "Cause: ${e.cause?.message}")
             Result.failure(e)
         } finally {
             _isLoading.value = false
@@ -158,13 +164,17 @@ class OrinServiceRepository @Inject constructor(
             val settings = settingsRepository.settings.first()
             
             Log.d(TAG, "Stopping services at: $url")
+            Log.d(TAG, "PIN configured: ${settings.serviceControlPin.isNotEmpty()}")
             
             val response = client.post(url) {
                 // Include PIN in header if set
                 if (settings.serviceControlPin.isNotEmpty()) {
                     header("X-Service-PIN", settings.serviceControlPin)
+                    Log.d(TAG, "PIN header added")
                 }
             }
+            
+            Log.d(TAG, "Response status: ${response.status.value} ${response.status.description}")
             
             if (response.status.isSuccess()) {
                 val controlResponse: ServiceControlResponse = response.body()
@@ -181,6 +191,8 @@ class OrinServiceRepository @Inject constructor(
             val errorMsg = "Failed to stop services: ${e.message}"
             _error.value = errorMsg
             Log.e(TAG, errorMsg, e)
+            Log.e(TAG, "Exception type: ${e.javaClass.name}")
+            Log.e(TAG, "Cause: ${e.cause?.message}")
             Result.failure(e)
         } finally {
             _isLoading.value = false

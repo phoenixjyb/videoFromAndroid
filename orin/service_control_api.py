@@ -156,6 +156,18 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
         raise HTTPException(status_code=403, detail="Invalid or missing PIN")
     
     try:
+        # First, stop any running services to avoid port conflicts
+        stop_script = SCRIPT_DIR / "stop_all_services.sh"
+        if stop_script.exists():
+            subprocess.run(
+                [str(stop_script)],
+                cwd=str(SCRIPT_DIR),
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            await asyncio.sleep(1)
+        
         # Run start script
         script_path = SCRIPT_DIR / "start_all_services.sh"
         if not script_path.exists():
