@@ -20,15 +20,17 @@ Remote-control Android phone camera with real-time H.265 video streaming and thr
 - 📹 **On-device recording** - Accurate timestamps, 4K support, auto file retrieval
 - 📼 **Local recording** - CamViewer tablet can record live streams to MP4
 - 📂 **Dual gallery** - View local recordings and synced videos from Orin
+- 🖥️ **Remote service control** - Start/stop Orin services from tablet with PIN protection
 - 🌐 **Multi-client streaming** - Broadcast to multiple viewers simultaneously
 - 🔧 **Developer mode** - Tablet app with visual camera control overlay
 
 ## System Components
 
 - **CamControl** (Phone App): Camera source with H.265 encoder, WebSocket server on port 9090
-- **CamViewer** (Tablet App): Video viewer with developer mode for camera control
+- **CamViewer** (Tablet App): Video viewer with developer mode for camera control + Orin service management
 - **Web UI** (Browser): Web-based viewer and control interface  
 - **Orin ROS2 Relay**: Bridges ROS2 topics to camera control commands
+- **Orin Service Control API**: REST API for remote service management (port 8083)
 
 ## Architecture
 
@@ -156,6 +158,69 @@ All commands use JSON with `"cmd"` discriminator field:
 /camera/key_frame  std_msgs/Empty      # Request keyframe
 ```
 
+## Orin Service Management
+
+**Remote Control from Tablet:** Start/stop Orin services (Target API, Media API) from CamViewer app.
+
+### Features
+- 🖥️ **Service Status Monitoring** - Real-time view of running services with PIDs
+- ▶️ **Start/Stop Controls** - Start All / Stop All buttons with PIN protection
+- 🔒 **PIN Protection** - Optional PIN to prevent unauthorized service control
+- 📋 **Service Logs** - Expandable log viewer for each service
+- 🔄 **Auto-refresh** - Toggle automatic status updates every 5 seconds
+- 🌐 **Network Aware** - Automatically detects ZeroTier/T8Space network
+
+### Setup (Orin)
+
+**Initial Setup (runs on boot):**
+```bash
+cd /home/nvidia/videoFromAndroid/orin
+sudo ./setup_recomo_service_control.sh
+```
+
+This installs a systemd service that:
+- Starts automatically on boot
+- Restarts automatically on failure
+- Runs on port 8083
+- Includes PIN protection (default: 1234)
+
+**Manual Restart (if needed):**
+```bash
+cd /home/nvidia/videoFromAndroid/orin
+./restart_recomo_api.sh
+```
+
+### Usage (Tablet)
+
+1. Open CamViewer app
+2. Navigate to "Orin" tab (computer icon)
+3. View service status:
+   - **Target API** (port 8082) - ROS2 target tracking
+   - **Media API** (port 8081) - Video file management
+4. Click "Start All" or "Stop All" (PIN required if configured)
+5. Expand service cards to view logs
+6. Toggle auto-refresh for real-time monitoring
+
+### Configuration
+
+**Change PIN (Orin):**
+Edit `/etc/systemd/system/recomo_service_control.service`:
+```ini
+Environment="SERVICE_CONTROL_PIN=your-pin-here"
+```
+Then restart: `sudo systemctl restart recomo_service_control`
+
+**Change PIN (Tablet):**
+Settings → Security → Service Control PIN
+
+**API Endpoints:**
+```
+GET  http://orin-ip:8083/api/services/status      # Get service status
+POST http://orin-ip:8083/api/services/start       # Start all services
+POST http://orin-ip:8083/api/services/stop        # Stop all services
+GET  http://orin-ip:8083/api/services/logs/{id}   # Get service logs
+```
+
 ## Project Structure
 
 ```
@@ -175,12 +240,23 @@ camviewer/                   # CamViewer tablet app (viewer + controls)
     video/VideoRecorder.kt   # MP4 recording with MediaMuxer
     ui/screens/video/        # Video display + control panel
     ui/screens/media/        # Gallery with two tabs (local/synced)
-    data/repository/MediaRepository.kt  # Media sync from Orin
+    ui/screens/orin/         # Orin service control screen
+    data/repository/MediaRepository.kt      # Media sync from Orin
+    data/repository/OrinServiceRepository.kt # Service control API client
+    data/models/ServiceModels.kt            # Service status models
 
 orin/                        # Jetson Orin ROS2 integration
   camera_control_relay.py    # ROS2 topics → WebSocket commands
+  service_control_api.py     # REST API for service management
+  target_api.py              # ROS2 target tracking API (port 8082)
+  media_api.py               # Video file management API (port 8081)
   setup_camera_relay.sh      # One-time setup script
   start_camera_relay.sh      # Launch relay
+  start_all_services.sh      # Start Target + Media APIs
+  stop_all_services.sh       # Stop all services (port-aware)
+  setup_recomo_service_control.sh  # Install systemd service
+  restart_recomo_api.sh      # Quick restart helper
+  recomo_service_control.service   # systemd service config
   test_camera_control.sh     # Test all controls via ROS2
   *.md                       # Setup guides and documentation
 
