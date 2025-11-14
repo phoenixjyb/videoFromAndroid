@@ -77,7 +77,7 @@ class ServiceStatus(BaseModel):
     running: bool
     pid: Optional[int]
     uptime_seconds: Optional[float]
-    port: int
+    port: Optional[int]  # Optional for ROS2 nodes without HTTP ports
     last_log_lines: List[str] = []
 
 class ServiceControlResponse(BaseModel):
