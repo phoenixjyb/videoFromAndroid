@@ -1,165 +1,313 @@
-# CamControl — 安卓相机流系统（Android + Mac 浏览器 + Orin）
+# CamControl — 远程安卓相机控制系统
 
 中文 | [English](README.md)
 
 ## 概览
-- 目标：远程控制安卓手机摄像头，在 Mac 浏览器预览，同时在 Jetson Orin 原生解码/处理或转发。
-- 传输：Android 端单一 Ktor WebSocket（端口 `9090`，路径 `/control`），文本帧承载控制与遥测，二进制帧承载视频（H.264 Annex‑B）。
-- 当前状态：Mac 端浏览器预览与控制已打通；Orin 端接入/RTSP/ROS2 节点已完成脚手架。
 
-## 架构（运行时）
+通过 **WebUI**、**CamViewer 平板应用**和 **Jetson Orin 的 ROS2 话题**三种方式远程控制安卓手机相机，实现实时 H.265 视频流传输。
+
+**状态：** ✅ **完全可用** - 三向相机控制工作正常，H.265 流传输，ROS2 集成完成。
+
+## 核心功能
+
+- 🎥 **实时 H.265 (HEVC) 视频流** - 高质量，低带宽
+- 🎛️ **三向相机控制** - WebUI、安卓平板应用或 ROS2 话题
+- 📱 **双摄像头支持** - 远程切换前置/后置摄像头
+- 🔍 **高级控制** - 变焦（1-10倍）、码率（1-50 Mbps）、AE/AWB 锁定、编码器选择
+- 🤖 **ROS2 集成** - 通过 Jetson Orin 上的 ROS2 话题完整控制相机
+- 🎯 **目标跟踪** - ROI 选择、边界框可视化、坐标变换
+- 💾 **媒体管理** - 通过 API 浏览、下载、删除录制视频
+- 📹 **设备端录制** - 精确时间戳、4K 支持、自动文件检索
+- 📼 **本地录制** - CamViewer 平板可将直播流录制为 MP4
+- 📂 **双画廊** - 查看本地录制和从 Orin 同步的视频
+- 🖥️ **远程服务控制** - 从平板启动/停止 Orin 服务，带 PIN 保护
+- 🌐 **多客户端流** - 向多个观看者广播
+- 🔧 **开发者模式** - 平板应用带可视化相机控制覆盖层
+
+## 系统组件
+
+- **CamControl**（手机应用）：带 H.265 编码器的相机源，WebSocket 服务器运行在 9090 端口
+- **CamViewer**（平板应用）：视频查看器，带开发者模式的相机控制 + Orin 服务管理
+- **Web UI**（浏览器）：基于 Web 的查看器和控制界面  
+- **Orin ROS2 中继**：桥接 ROS2 话题到相机控制命令
+- **Orin 服务控制 API**：用于远程服务管理的 REST API（8083 端口）
+
+## 架构
+
 ```
-Mac（浏览器） ←→ Android CamControl（Ktor WS 9090） → Orin（WS 接入）
-  │  HTML/JS          └─ Camera2 + 编码（H.264）        ├─ GStreamer NVDEC 解码显示
-  │  WebCodecs              ↑ 广播控制命令               ├─ RTSP 转发（rtsp://:8554/cam）
-  └─ 控制 JSON              │ 遥测 JSON                  └─ ROS2 节点发布 sensor_msgs/Image
+┌─────────────────────────────────────────────────────────────────┐
+│                  CamControl（手机）                              │
+│                  📱 相机源                                       │
+│                                                                 │
+│  • Camera2 API + MediaCodec H.265 编码器                        │
+│  • WebSocket 服务器 :9090                                       │
+│  • 端点：/（视频+遥测）、/control（命令）                        │
+│  • 向所有连接的客户端广播视频                                    │
+└────────────┬────────────────────────────────────────────────────┘
+             │
+             │ ws://phone-ip:9090
+             │
+    ┌────────┼──────────┬─────────────────────┐
+    │        │          │                     │
+    ▼        ▼          ▼                     ▼
+┌────────┐ ┌──────┐ ┌─────────┐     ┌──────────────┐
+│WebUI   │ │平板  │ │ Orin    │     │ ROS2 话题    │
+│浏览器  │ │应用  │ │ 接收    │     │              │
+│        │ │      │ │         │     │ /camera/zoom │
+│控制    │ │视频  │ │ROS2 发布│◄────┤ /camera/ae   │
+│+ 查看  │ │查看  │ │         │     │ /camera/awb  │
+│        │ │控制  │ │         │     │ /camera/...  │
+└────────┘ └──────┘ └─────────┘     └──────────────┘
+                                             ▲
+                                             │
+                                     camera_control_relay.py
 ```
 
-- 浏览器：连接 `ws://<host>:9090/control`，优先使用 WebCodecs 解码（Annex‑B→AVCC），回退到 Broadway（JS 解码）。
-- Android：Ktor 提供 Web 页面（`/`）和 WebSocket（`/control`）；MediaCodec 输出 H.264；Service 将控制转发给 Activity；广播遥测。
-- Orin：原生 Python 通过 WebSocket 接收视频帧并注入 GStreamer（`appsrc → h264parse → nvv4l2decoder`）；支持 RTSP 服务与 ROS2 发布。
+**三向相机控制：**
+1. **WebUI**（`http://phone-ip:9090/`）- 基于浏览器的查看器和控制
+2. **CamViewer 开发者模式** - 平板应用 UI（变焦、相机切换、码率、编码器）
+3. **ROS2 话题** - 发布到 Orin 上的 `/camera/*` 话题，中继转发到手机
 
-## 软件结构
+**视频流：**
+- 手机编码 H.265 → 向所有 WebSocket 客户端广播
+- 客户端解码并显示（浏览器使用 WebCodecs，Android 使用 MediaCodec）
+
+**命令流：**  
+- 任何客户端 → `ws://phone-ip:9090/control` → JSON 命令 → 手机相机调整
+- ROS2：话题 → camera_control_relay.py → WebSocket 命令 → 手机
+
+## 快速开始
+
+### 1. 安装应用（包含预构建 APK）
+```bash
+# 手机（相机源）
+adb -s <phone-serial> install app/build/outputs/apk/debug/app-debug.apk
+
+# 平板（查看器）
+adb -s <tablet-serial> install camviewer/build/outputs/apk/debug/camviewer-debug.apk
 ```
-app/（Android 应用）
-  CamControlService.kt     # 前台 Service：WS 服务、编码器、遥测转发
-  MainActivity.kt          # 相机流水线（预览 + 挂接编码 Surface）
-  camera/Camera2Controller.kt
-  encode/VideoEncoder.kt   # MediaCodec H.264（Annex‑B）
-  transport/ControlServer.kt（Ktor HTTP+WS）/ ControlCommand.kt / Telemetry.kt
-  assets/index.html        # Web UI（WebCodecs 解码 + 控件）
 
-scripts/                   # 生产级录制与流传输脚本
-  record_on_device.py      # 设备端 MP4 录制（MediaMuxer）
-  record_video.py          # WebSocket 流捕获
+### 2. 启动相机服务器（手机）
+- 启动 CamControl 应用
+- 注意显示的 IP 地址（取决于网络）：
+  - **ZeroTier**：`192.168.100.156`
+  - **T8Space**：`172.16.30.28`
+- 保持应用在前台
+
+### 3. 连接客户端
+
+**CamViewer（平板）：**
+- 打开设置 → 选择网络预设
+- 选择"ZeroTier"或"T8Space"
+- 开启开发者模式以使用相机控制
+
+**WebUI（浏览器）：**
+
+ZeroTier 网络：
+```
+http://192.168.100.156:9090
+```
+
+T8Space 网络：
+```
+http://172.16.30.28:9090
+```
+
+**Orin 服务：**
+```bash
+# ZeroTier（默认）
+cd orin && ./start_all_services.sh
+
+# T8Space
+cd orin && NETWORK_CONFIG=t8space ./start_all_services.sh
+```
+
+**ROS2（Orin）：**
+```bash
+cd orin/
+./setup_camera_relay.sh          # 仅首次
+./start_camera_relay.sh --phone-host <phone-ip>
+
+# 测试控制
+ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 3.0"
+ros2 topic pub --once /camera/switch std_msgs/String "data: 'front'"
+```
+
+## 相机控制命令
+
+所有命令使用带 `"cmd"` 区分字段的 JSON：
+
+```json
+{"cmd":"setZoomRatio","value":2.5}
+{"cmd":"switchCamera","facing":"back"}      // "back" 或 "front"  
+{"cmd":"setAeLock","value":true}
+{"cmd":"setAwbLock","value":false}
+{"cmd":"setBitrate","bitrate":5000000}      // 比特每秒
+{"cmd":"setCodec","codec":"h265"}           // "h264" 或 "h265"
+{"cmd":"requestKeyFrame"}
+```
+
+### ROS2 控制话题
+```bash
+/camera/zoom       std_msgs/Float32    # 1.0 - 10.0
+/camera/ae_lock    std_msgs/Bool       # 自动曝光锁定
+/camera/awb_lock   std_msgs/Bool       # 自动白平衡锁定
+/camera/switch     std_msgs/String     # "back" 或 "front"
+/camera/bitrate    std_msgs/Int32      # 比特/秒
+/camera/codec      std_msgs/String     # "h264" 或 "h265"
+/camera/key_frame  std_msgs/Empty      # 请求关键帧
+```
+
+## Orin 服务管理
+
+**从平板远程控制：** 从 CamViewer 应用启动/停止 Orin 服务（Target API、Media API）。
+
+### 功能
+- 🖥️ **服务状态监控** - 实时查看运行中的服务及 PID
+- ▶️ **启动/停止控制** - 启动全部/停止全部按钮，带 PIN 保护
+- 🔒 **PIN 保护** - 可选 PIN 防止未授权的服务控制
+- 📋 **服务日志** - 每个服务的可展开日志查看器
+- 🔄 **自动刷新** - 切换每 5 秒自动状态更新
+- 🌐 **网络感知** - 自动检测 ZeroTier/T8Space 网络
+
+### 设置（Orin）
+
+**初始设置（开机启动）：**
+```bash
+cd /home/nvidia/videoFromAndroid/orin
+sudo ./setup_recomo_service_control.sh
+```
+
+这会安装一个 systemd 服务：
+- 开机自动启动
+- 失败自动重启
+- 运行在 8083 端口
+- 包含 PIN 保护（默认：1234）
+
+**手动重启（如需要）：**
+```bash
+cd /home/nvidia/videoFromAndroid/orin
+./restart_recomo_api.sh
+```
+
+### 使用（平板）
+
+1. 打开 CamViewer 应用
+2. 导航到"Orin"标签（电脑图标）
+3. 查看服务状态：
+   - **Target API**（8082 端口）- ROS2 目标跟踪
+   - **Media API**（8081 端口）- 视频文件管理
+4. 点击"启动全部"或"停止全部"（如已配置需要 PIN）
+5. 展开服务卡片查看日志
+6. 切换自动刷新进行实时监控
+
+### 配置
+
+**更改 PIN（Orin）：**
+编辑 `/etc/systemd/system/recomo_service_control.service`：
+```ini
+Environment="SERVICE_CONTROL_PIN=your-pin-here"
+```
+然后重启：`sudo systemctl restart recomo_service_control`
+
+**更改 PIN（平板）：**
+设置 → 安全 → 服务控制 PIN
+
+**API 端点：**
+```
+GET  http://orin-ip:8083/api/services/status      # 获取服务状态
+POST http://orin-ip:8083/api/services/start       # 启动所有服务
+POST http://orin-ip:8083/api/services/stop        # 停止所有服务
+GET  http://orin-ip:8083/api/services/logs/{id}   # 获取服务日志
+```
+
+## 项目结构
+
+```
+app/                         # CamControl 手机应用（相机源）
+  src/main/java/com/example/camcontrol/
+    MainActivity.kt          # Camera2 流水线
+    CamControlService.kt     # WebSocket 服务器 + 编码器
+    encode/VideoEncoder.kt   # MediaCodec H.265 编码器（默认）
+    transport/ControlServer.kt # Ktor WS 服务器 :9090
+  src/main/assets/index.html # 内置 WebUI
+
+camviewer/                   # CamViewer 平板应用（查看器 + 控制）
+  src/main/java/com/example/camviewer/
+    MainActivity.kt          # 视频显示 + 开发控制
+    network/PhoneCameraClient.kt  # WebSocket 客户端
+    video/VideoDecoder.kt    # MediaCodec H.265 解码器（默认）
+    video/VideoRecorder.kt   # 使用 MediaMuxer 的 MP4 录制
+    ui/screens/video/        # 视频显示 + 控制面板
+    ui/screens/media/        # 带两个标签的画廊（本地/同步）
+    ui/screens/orin/         # Orin 服务控制屏幕
+    data/repository/MediaRepository.kt      # 从 Orin 同步媒体
+    data/repository/OrinServiceRepository.kt # 服务控制 API 客户端
+    data/models/ServiceModels.kt            # 服务状态模型
+
+orin/                        # Jetson Orin ROS2 集成
+  camera_control_relay.py    # ROS2 话题 → WebSocket 命令
+  service_control_api.py     # 用于服务管理的 REST API
+  target_api.py              # ROS2 目标跟踪 API（8082 端口）
+  media_api.py               # 视频文件管理 API（8081 端口）
+  setup_camera_relay.sh      # 一次性设置脚本
+  start_camera_relay.sh      # 启动中继
+  start_all_services.sh      # 启动 Target + Media API
+  stop_all_services.sh       # 停止所有服务（端口感知）
+  setup_recomo_service_control.sh  # 安装 systemd 服务
+  restart_recomo_api.sh      # 快速重启助手
+  recomo_service_control.service   # systemd 服务配置
+  test_camera_control.sh     # 通过 ROS2 测试所有控制
+  *.md                       # 设置指南和文档
+
+scripts/                     # 录制和测试工具
+  record_on_device.py        # 最佳：精确的 MP4 录制
+  record_video.py            # 基于 WebSocket 的录制
   ws_probe.py, ws_save_h264.py, ws_cmd.py
-  test_with_subscriber.sh  # ROS2 集成测试
-  stream_diagnostics.sh    # 流健康监控
 
-tools/                     # 开发工具
-  quick_start.sh           # 构建、安装、转发、启动
-  quick_logs.sh            # 监控 Android 日志
-
-tests/                     # 测试脚本与验证
-  test_websocket.py, test_commands.py, test_camera_switch.py
-  test_telemetry_ws.py, test_webui_commands.py
-  test_recomo_rgb_ros2.sh  # ROS2 集成测试
-  webcodecs-selftest.html  # 浏览器 WebCodecs 验证
-
-orin/                      # Jetson Orin 集成
-  ws_h264_gst.py           # WS 接入 → GStreamer 解码显示（NVDEC）
-  ws_h264_rtsp_server.py   # WS → RTSP（rtsp://<orin-ip>:8554/cam）
-  ros2_camcontrol/         # ROS2 Humble 包（WS → sensor_msgs/Image + 相机控制）
-    ros2_camcontrol/ws_to_image.py         # 主 ROS2 节点
-    ros2_camcontrol/camera_control_test.py # 交互式测试工具
-    msg/                   # 自定义 ROS2 消息类型
-  CAMERA_CONTROL_USAGE.md  # 相机控制指南
-  CAMERA_CONTROL_TEST_RESULTS.md # 测试验证报告
-
-docs/                      # 项目文档
-  DIARY.md                 # 项目日志与路线图
-  PROJECT_STATUS_SUMMARY.md # 当前状态快照
-  ProjectSetup.md          # 初始设置指南
-  WIFI_ACCESS.md           # 网络配置
-
-device_info/               # 硬件规格
-  sms9160Capability.txt, sms9280Capability.txt
-  systemChart.txt          # 系统架构图
-
-assets/                    # 图片与媒体
-  logoRef.png              # 项目图标
-
-README.md / README_zh.md   # 双语总览（本文件）
+docs/                        # 项目文档
+  *.md                       # 架构、设置指南、状态
 ```
 
-## 协议
-- WebSocket：`ws://<phone-ip>:9090/control`
-  - 文本帧（JSON）：
-    - `{\"cmd\":\"setZoomRatio\",\"value\":2.5}`
-    - `{\"cmd\":\"switchCamera\",\"facing\":\"front\"}`
-    - `{\"cmd\":\"setAeLock\",\"value\":true}` / `setAwbLock` / `startRecording` / `stopRecording` / `setVideoProfile`
-  - 遥测（JSON）：`{af, ae, iso, expNs, zoom, fps}`
-  - 二进制帧：H.264 Annex‑B（IDR 前含 SPS/PPS）
+## 技术细节
 
-## 快速上手
-### Android（构建与安装）
-- USB 连接手机（开发者模式）。
-- 构建安装：`./gradlew installDebug`
-- 端口转发：`adb forward tcp:9090 tcp:9090`
+**视频编解码器：** 所有组件默认使用 H.265 (HEVC) 以获得更好的压缩
+- 手机编码器：使用 MIME_TYPE_HEVC 的 MediaCodec
+- CamViewer 解码器：使用 MIMETYPE_VIDEO_HEVC 的 MediaCodec  
+- WebUI：WebCodecs（H.265 支持）
+- Orin：GStreamer nvv4l2decoder（硬件加速）
 
-### Mac 浏览器预览
-- 打开 `http://localhost:9090`（Edge/Chrome）。
-- 若首屏空白，刷新一次（等待 SPS/PPS 关键帧）。
-- 排障：保持 App 前台；确认 `adb forward`；关闭本机代理或将 `localhost` 直连；`scripts/log.sh --both --forward` 查看日志。
+**网络：** 支持 ZeroTier 和 T8Space 预设
+- 配置文件：`config/*.env`
+- 自动 IP 检测
+- 端口转发和直连
 
-### 本地抓流（Mac）
-- `source .venv/bin/activate && python scripts/ws_save_h264.py --seconds 10 --out capture.h264`
-- Remux：`ffmpeg -y -f h264 -i capture.h264 -c copy capture.mp4`
+**性能：**
+- 手机编码：1080p @ 30fps，5-15 Mbps
+- 网络延迟：< 100ms（局域网）
+- 解码：硬件加速（所有平台）
 
-### Orin — 显示/解码
-- 安装依赖：`python3-gi`、`gir1.2-gstreamer-1.0`、GStreamer 插件、`nvidia-l4t-gstreamer`、`websockets`。
-- 运行：`python3 orin/ws_h264_gst.py --host <android-ip> --codec h265`（默认手机推送 HEVC，如需 H.264 请加 `--codec h264`）
+## 故障排除
 
-### Orin — RTSP 转发
-- `python3 orin/ws_h264_rtsp_server.py --host <android-ip>`
-- 播放：`rtsp://<orin-ip>:8554/cam`
+**连接问题：**
+- 检查所有设备在同一网络
+- 验证防火墙规则
+- 确认 IP 地址正确
 
-### Orin — ROS2 图像发布（快速启动）
-- 前置条件：`android-tools-adb`、ROS2 Humble、GStreamer 依赖，并已在 `orin/ros2_camcontrol` 下执行 `colcon build --symlink-install`。
-- 将安卓手机通过 USB 连接并打开 CamControl App 后，运行：
-  ```bash
-  ./quick_start.sh
-  ```
-  脚本会检测 ADB、建立 `localhost:9100 → device:9090` 转发、source ROS2 环境，并以 10 Hz（HEVC）启动 `ros2_camcontrol.ws_to_image`，输出主题 `/recomo/rgb` 与 `/recomo/camera_info`。
+**视频问题：**
+- 等待关键帧（刷新浏览器）
+- 检查编解码器兼容性
+- 监控比特率/分辨率
 
-- **性能表现**：节点以 BEST_EFFORT QoS 发布 640×480 RGB8 图像，实测稳定在 **~8.8 Hz**，相比原始 1920×1080 基线（~1.2 Hz）提升 7.3 倍。降采样由硬件加速的 nvvidconv 完成，CPU 开销极低。
+**Orin 服务：**
+- 检查 systemd 状态：`sudo systemctl status recomo_service_control`
+- 查看日志：`sudo journalctl -u recomo_service_control -f`
+- 重启服务：`./restart_recomo_api.sh`
 
-- 如需一次性收集 CPU 占用、话题频率、最近日志，可使用诊断脚本：
-  ```bash
-  ./scripts/stream_diagnostics.sh
-  ./scripts/stream_diagnostics.sh --dry-run-publish  # 跳过发布，仅测 pipeline 延迟
-  ```
+## 贡献
 
-- **图像保存测试**：验证实际吞吐量，使用真实订阅节点保存图像到磁盘：
-  ```bash
-  ./scripts/test_with_subscriber.sh 50         # 保存 50 帧图像并测量频率
-  ```
-  图像保存在时间戳文件夹 `saved_images/run_YYYYMMDD_HHMMSS/`，包含帧计数和统计信息。
+欢迎问题报告和拉取请求！
 
-- 节点运行期间，可在新终端查看 ROS2 信息：
-  ```bash
-  source /opt/ros/humble/setup.bash
-  source /home/nvidia/videoFromAndroid/orin/ros2_camcontrol/install/setup.bash
-  ros2 topic hz /recomo/rgb --window 50
-  ros2 topic echo /recomo/rgb --once
-  ```
-  发布的图像为 640×480 RGB8 格式，话题为 `/recomo/rgb` 及对应的 `/recomo/camera_info`。原始手机流为 1920×1080，在 Orin 上降采样以提高 ROS2 传输效率。
+## 许可证
 
-### Orin — ROS2 图像发布
-- ROS2 Humble：`source /opt/ros/humble/setup.bash`
-- 构建：`cd orin/ros2_camcontrol && colcon build --symlink-install && source install/setup.bash`
-- 运行：`ros2 run ros2_camcontrol ws_to_image --host <android-ip> --topic /recomo/rgb --rate 10 --codec h265`
-
-## 已完成
-- 统一端口 9090；单 WS 同时承载控制/遥测/视频。
-- Android：Service 管 WS+编码；Activity 管相机；显式广播命令。
-- Web UI：WebCodecs 解码（Annex‑B→AVCC）；错误重置；Broadway 兜底。
-- 控制（变焦、切换摄像头）与遥测链路验证通过。
-- 浏览器播放与本地抓流均已验证；二进制帧正确输出。
-- Orin：完成 WS 接入 + NVDEC 解码、RTSP 转发、ROS2 图像发布脚手架。
-
-## 下一步
-- Android：
-  - 采集音频并封装至 MP4；配置切换握手；健壮性/退避重试。
-  - 手动曝光/ISO、AF 控件；参数持久化。
-- Orin：
-  - `tee` 一次解码多路扇出（显示 + CUDA/DeepStream + RTSP）；重连与指标上报。
-  - ROS2 走 NVMM 零拷贝路径以适配 CUDA。
-- Web：
-  - 显示解码器状态（WebCodecs/Broadway）、FPS、重连按钮；可选 WebRTC/MSE。
-
-## 常见问题
-- ADB 转发：`adb forward --list` 应包含 `tcp:9090 tcp:9090`。
-- 代理：`localhost` 需直连；确保未被 `http_proxy`/`https_proxy` 劫持。
-- 日志：`adb logcat -v time -s ControlServer:D CamControlService:D MainActivity:D`。
-- WS 探测：`python scripts/ws_probe.py` 能看到二进制帧即表示在推流。
+MIT 许可证
