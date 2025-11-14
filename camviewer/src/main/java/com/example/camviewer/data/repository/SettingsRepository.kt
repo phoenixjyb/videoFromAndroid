@@ -23,6 +23,7 @@ class SettingsRepository @Inject constructor(
         val ORIN_MEDIA_URL = stringPreferencesKey("orin_media_url")
         val PHONE_CONTROL_HOST = stringPreferencesKey("phone_control_host")
         val DEVELOPER_MODE = booleanPreferencesKey("developer_mode")
+        val SERVICE_CONTROL_PIN = stringPreferencesKey("service_control_pin")
     }
     
     val settings: Flow<AppSettings> = dataStore.data.map { preferences ->
@@ -35,7 +36,8 @@ class SettingsRepository @Inject constructor(
             orinTargetUrl = preferences[PreferencesKeys.ORIN_TARGET_URL] ?: preset.getOrinTargetUrl(),
             orinMediaUrl = preferences[PreferencesKeys.ORIN_MEDIA_URL] ?: preset.getOrinMediaUrl(),
             phoneControlHost = preferences[PreferencesKeys.PHONE_CONTROL_HOST] ?: preset.phoneIp,
-            developerModeEnabled = preferences[PreferencesKeys.DEVELOPER_MODE] ?: false
+            developerModeEnabled = preferences[PreferencesKeys.DEVELOPER_MODE] ?: false,
+            serviceControlPin = preferences[PreferencesKeys.SERVICE_CONTROL_PIN] ?: ""
         )
     }
     
@@ -47,6 +49,7 @@ class SettingsRepository @Inject constructor(
             preferences[PreferencesKeys.ORIN_MEDIA_URL] = settings.orinMediaUrl
             preferences[PreferencesKeys.PHONE_CONTROL_HOST] = settings.phoneControlHost
             preferences[PreferencesKeys.DEVELOPER_MODE] = settings.developerModeEnabled
+            preferences[PreferencesKeys.SERVICE_CONTROL_PIN] = settings.serviceControlPin
         }
     }
     
@@ -65,6 +68,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setDeveloperMode(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.DEVELOPER_MODE] = enabled
+        }
+    }
+    
+    suspend fun setServiceControlPin(pin: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SERVICE_CONTROL_PIN] = pin
         }
     }
 }

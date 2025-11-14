@@ -146,17 +146,19 @@ data class AppSettings(
     val orinTargetUrl: String = NetworkPreset.ZEROTIER.getOrinTargetUrl(),
     val orinMediaUrl: String = NetworkPreset.ZEROTIER.getOrinMediaUrl(),
     val phoneControlHost: String = NetworkPreset.ZEROTIER.phoneIp,
-    val developerModeEnabled: Boolean = false
+    val developerModeEnabled: Boolean = false,
+    val serviceControlPin: String = "" // PIN for Orin service control (empty = no PIN)
 ) {
     companion object {
-        fun fromPreset(preset: NetworkPreset, developerModeEnabled: Boolean = false): AppSettings {
+        fun fromPreset(preset: NetworkPreset, developerModeEnabled: Boolean = false, serviceControlPin: String = ""): AppSettings {
             return AppSettings(
                 networkPreset = preset,
                 cameraUrl = preset.getPhoneVideoUrl(),
                 orinTargetUrl = preset.getOrinTargetUrl(),
                 orinMediaUrl = preset.getOrinMediaUrl(),
                 phoneControlHost = preset.phoneIp,
-                developerModeEnabled = developerModeEnabled
+                developerModeEnabled = developerModeEnabled,
+                serviceControlPin = serviceControlPin
             )
         }
     }

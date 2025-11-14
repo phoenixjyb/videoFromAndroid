@@ -2,10 +2,17 @@ package com.example.camviewer.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -58,6 +65,8 @@ fun SettingsScreen(
     var orinTargetUrl by remember { mutableStateOf(settings.orinTargetUrl) }
     var orinMediaUrl by remember { mutableStateOf(settings.orinMediaUrl) }
     var developerMode by remember { mutableStateOf(settings.developerModeEnabled) }
+    var serviceControlPin by remember { mutableStateOf(settings.serviceControlPin) }
+    var showPin by remember { mutableStateOf(false) }
     var showSaved by remember { mutableStateOf(false) }
     
     // Update local state when settings change
@@ -67,6 +76,7 @@ fun SettingsScreen(
         orinTargetUrl = settings.orinTargetUrl
         orinMediaUrl = settings.orinMediaUrl
         developerMode = settings.developerModeEnabled
+        serviceControlPin = settings.serviceControlPin
     }
     
     Column(
@@ -235,6 +245,36 @@ fun SettingsScreen(
             )
         }
         
+        Divider()
+        
+        // Security Section
+        Text(
+            text = "Security",
+            style = MaterialTheme.typography.titleLarge
+        )
+        
+        OutlinedTextField(
+            value = serviceControlPin,
+            onValueChange = { serviceControlPin = it },
+            label = { Text("Service Control PIN") },
+            placeholder = { Text("Leave empty to disable") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            visualTransformation = if (showPin) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            trailingIcon = {
+                IconButton(onClick = { showPin = !showPin }) {
+                    Icon(
+                        imageVector = if (showPin) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = if (showPin) "Hide PIN" else "Show PIN"
+                    )
+                }
+            },
+            supportingText = {
+                Text("PIN required to start/stop Orin services (leave empty for no protection)")
+            }
+        )
+        
         Spacer(modifier = Modifier.height(16.dp))
         
         // Save Button
@@ -246,7 +286,8 @@ fun SettingsScreen(
                         cameraUrl = cameraUrl,
                         orinTargetUrl = orinTargetUrl,
                         orinMediaUrl = orinMediaUrl,
-                        developerModeEnabled = developerMode
+                        developerModeEnabled = developerMode,
+                        serviceControlPin = serviceControlPin
                     )
                 )
                 showSaved = true

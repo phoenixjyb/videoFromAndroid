@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,9 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.rememberCoroutineScope
 import com.example.camviewer.data.model.OrinServiceStatus
+import kotlinx.coroutines.launch
 
 /**
  * Orin services control screen
@@ -28,6 +33,29 @@ fun OrinControlScreen(
     viewModel: OrinControlViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
+    var showPinDialog by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<PinAction?>(null) }
+    
+    // PIN dialog
+    if (showPinDialog && pendingAction != null) {
+        PinDialog(
+            action = pendingAction!!,
+            onDismiss = { 
+                showPinDialog = false
+                pendingAction = null
+            },
+            onConfirm = { pin ->
+                showPinDialog = false
+                when (pendingAction) {
+                    PinAction.START -> viewModel.startServices(pin)
+                    PinAction.STOP -> viewModel.stopServices(pin)
+                    null -> {}
+                }
+                pendingAction = null
+            }
+        )
+    }
     
     Scaffold(
         topBar = {
@@ -79,8 +107,26 @@ fun OrinControlScreen(
         ) {
             // Control buttons
             ControlButtonsSection(
-                onStartAll = { viewModel.startServices() },
-                onStopAll = { viewModel.stopServices() },
+                onStartAll = { 
+                    scope.launch {
+                        if (viewModel.requiresPin()) {
+                            pendingAction = PinAction.START
+                            showPinDialog = true
+                        } else {
+                            viewModel.startServices()
+                        }
+                    }
+                },
+                onStopAll = { 
+                    scope.launch {
+                        if (viewModel.requiresPin()) {
+                            pendingAction = PinAction.STOP
+                            showPinDialog = true
+                        } else {
+                            viewModel.stopServices()
+                        }
+                    }
+                },
                 isLoading = uiState.isLoading,
                 allRunning = viewModel.areAllServicesRunning()
             )
@@ -452,4 +498,90 @@ private fun formatTimestamp(timestamp: Long): String {
         seconds < 3600 -> "${seconds / 60}m ago"
         else -> "${seconds / 3600}h ago"
     }
+}
+
+/**
+ * Action type for PIN dialog
+ */
+enum class PinAction {
+    START,
+    STOP
+}
+
+/**
+ * PIN confirmation dialog
+ */
+@Composable
+private fun PinDialog(
+    action: PinAction,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var pinInput by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf(false) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Lock,
+                contentDescription = null
+            )
+        },
+        title = {
+            Text(
+                text = when (action) {
+                    PinAction.START -> "Start Services"
+                    PinAction.STOP -> "Stop Services"
+                }
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Enter PIN to ${action.name.lowercase()} Orin services",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                
+                OutlinedTextField(
+                    value = pinInput,
+                    onValueChange = {
+                        pinInput = it
+                        pinError = false
+                    },
+                    label = { Text("PIN") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number
+                    ),
+                    singleLine = true,
+                    isError = pinError,
+                    supportingText = if (pinError) {
+                        { Text("PIN is required") }
+                    } else null,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (pinInput.isNotBlank()) {
+                        onConfirm(pinInput)
+                    } else {
+                        pinError = true
+                    }
+                }
+            ) {
+                Text("Confirm")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

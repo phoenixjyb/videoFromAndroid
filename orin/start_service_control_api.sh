@@ -3,6 +3,11 @@
 #
 # Usage:
 #   ./start_service_control_api.sh
+#   SERVICE_CONTROL_PIN=1234 ./start_service_control_api.sh  # With PIN protection
+#
+# Environment variables:
+#   SERVICE_CONTROL_PORT - API port (default: 8083)
+#   SERVICE_CONTROL_PIN  - PIN for start/stop operations (optional)
 
 set -e
 
@@ -10,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 PORT="${SERVICE_CONTROL_PORT:-8083}"
+PIN="${SERVICE_CONTROL_PIN:-}"
 
 echo "=========================================="
 echo "Orin Service Control API - Startup"
@@ -38,6 +44,12 @@ echo
 echo "Starting Service Control API..."
 echo "  URL: http://0.0.0.0:$PORT"
 echo "  Logs: service_control_api.log"
+if [ -n "$PIN" ]; then
+    echo "  Security: PIN protection enabled"
+fi
+
+# Export PIN for the API process
+export SERVICE_CONTROL_PIN="$PIN"
 
 nohup python3 service_control_api.py --port $PORT > service_control_api.log 2>&1 &
 API_PID=$!

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.camviewer.data.model.OrinServiceStatus
 import com.example.camviewer.data.repository.OrinServiceRepository
+import com.example.camviewer.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -27,7 +28,8 @@ data class OrinServicesUiState(
  */
 @HiltViewModel
 class OrinControlViewModel @Inject constructor(
-    private val orinServiceRepository: OrinServiceRepository
+    private val orinServiceRepository: OrinServiceRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     companion object {
@@ -71,10 +73,27 @@ class OrinControlViewModel @Inject constructor(
     }
 
     /**
-     * Start all Orin services
+     * Check if PIN is required for service control
      */
-    fun startServices() {
+    suspend fun requiresPin(): Boolean {
+        val settings = settingsRepository.settings.first()
+        return settings.serviceControlPin.isNotEmpty()
+    }
+
+    /**
+     * Start all Orin services (with optional PIN validation)
+     */
+    fun startServices(enteredPin: String? = null) {
         viewModelScope.launch {
+            // Validate PIN if required
+            val settings = settingsRepository.settings.first()
+            if (settings.serviceControlPin.isNotEmpty()) {
+                if (enteredPin != settings.serviceControlPin) {
+                    _uiState.update { it.copy(error = "Incorrect PIN") }
+                    return@launch
+                }
+            }
+            
             Log.d(TAG, "Starting all services")
             val result = orinServiceRepository.startServices()
             
@@ -90,10 +109,19 @@ class OrinControlViewModel @Inject constructor(
     }
 
     /**
-     * Stop all Orin services
+     * Stop all Orin services (with optional PIN validation)
      */
-    fun stopServices() {
+    fun stopServices(enteredPin: String? = null) {
         viewModelScope.launch {
+            // Validate PIN if required
+            val settings = settingsRepository.settings.first()
+            if (settings.serviceControlPin.isNotEmpty()) {
+                if (enteredPin != settings.serviceControlPin) {
+                    _uiState.update { it.copy(error = "Incorrect PIN") }
+                    return@launch
+                }
+            }
+            
             Log.d(TAG, "Stopping all services")
             val result = orinServiceRepository.stopServices()
             

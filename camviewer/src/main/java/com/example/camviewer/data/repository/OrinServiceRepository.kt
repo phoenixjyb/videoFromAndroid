@@ -113,10 +113,16 @@ class OrinServiceRepository @Inject constructor(
 
             val baseUrl = getServiceControlUrl()
             val url = "$baseUrl/api/services/start"
+            val settings = settingsRepository.settings.first()
             
             Log.d(TAG, "Starting services at: $url")
             
-            val response = client.post(url)
+            val response = client.post(url) {
+                // Include PIN in header if set
+                if (settings.serviceControlPin.isNotEmpty()) {
+                    header("X-Service-PIN", settings.serviceControlPin)
+                }
+            }
             
             if (response.status.isSuccess()) {
                 val controlResponse: ServiceControlResponse = response.body()
@@ -149,10 +155,16 @@ class OrinServiceRepository @Inject constructor(
 
             val baseUrl = getServiceControlUrl()
             val url = "$baseUrl/api/services/stop"
+            val settings = settingsRepository.settings.first()
             
             Log.d(TAG, "Stopping services at: $url")
             
-            val response = client.post(url)
+            val response = client.post(url) {
+                // Include PIN in header if set
+                if (settings.serviceControlPin.isNotEmpty()) {
+                    header("X-Service-PIN", settings.serviceControlPin)
+                }
+            }
             
             if (response.status.isSuccess()) {
                 val controlResponse: ServiceControlResponse = response.body()

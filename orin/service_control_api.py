@@ -22,13 +22,16 @@ from datetime import datetime
 from typing import Dict, List, Optional
 import argparse
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
 # Get script directory
 SCRIPT_DIR = Path(__file__).parent.absolute()
+
+# Service Control PIN (set via environment variable or leave empty to disable)
+SERVICE_PIN = os.environ.get("SERVICE_CONTROL_PIN", "")
 
 # Service configuration
 SERVICES = {
@@ -132,6 +135,12 @@ async def root():
         ]
     }
 
+def verify_pin(x_service_pin: Optional[str] = None) -> bool:
+    """Verify PIN if SERVICE_PIN is set"""
+    if not SERVICE_PIN:
+        return True  # No PIN required
+    return x_service_pin == SERVICE_PIN
+
 @app.get("/api/services/status", response_model=Dict[str, ServiceStatus])
 async def get_status():
     """Get status of all services"""
@@ -141,8 +150,11 @@ async def get_status():
     return status
 
 @app.post("/api/services/start", response_model=ServiceControlResponse)
-async def start_services():
-    """Start all Orin services"""
+async def start_services(x_service_pin: Optional[str] = Header(None)):
+    """Start all Orin services (PIN required if SERVICE_PIN env var set)"""
+    if not verify_pin(x_service_pin):
+        raise HTTPException(status_code=403, detail="Invalid or missing PIN")
+    
     try:
         # Run start script
         script_path = SCRIPT_DIR / "start_all_services.sh"
@@ -179,8 +191,11 @@ async def start_services():
         raise HTTPException(status_code=500, detail=f"Failed to start services: {str(e)}")
 
 @app.post("/api/services/stop", response_model=ServiceControlResponse)
-async def stop_services():
-    """Stop all Orin services"""
+async def stop_services(x_service_pin: Optional[str] = Header(None)):
+    """Stop all Orin services (PIN required if SERVICE_PIN env var set)"""
+    if not verify_pin(x_service_pin):
+        raise HTTPException(status_code=403, detail="Invalid or missing PIN")
+    
     try:
         # Run stop script
         script_path = SCRIPT_DIR / "stop_all_services.sh"
