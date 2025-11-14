@@ -21,7 +21,7 @@ data class OrinServiceStatus(
     val uptimeSeconds: Double? = null,
     
     @SerialName("port")
-    val port: Int,
+    val port: Int? = null,  // Nullable for ROS2 nodes without HTTP ports
     
     @SerialName("last_log_lines")
     val lastLogLines: List<String> = emptyList()
