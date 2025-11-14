@@ -1,0 +1,18 @@
+[Unit]
+Description=Recomo Service Control API
+After=network.target
+
+[Service]
+Type=simple
+User=cr
+WorkingDirectory=/home/nvidia/videoFromAndroid/orin
+Environment="SERVICE_CONTROL_PIN=1234"
+Environment="SERVICE_CONTROL_PORT=8083"
+ExecStart=/usr/bin/python3 /home/nvidia/videoFromAndroid/orin/service_control_api.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/nvidia/videoFromAndroid/orin/service_control_api.log
+StandardError=append:/home/nvidia/videoFromAndroid/orin/service_control_api.log
+
+[Install]
+WantedBy=multi-user.target
