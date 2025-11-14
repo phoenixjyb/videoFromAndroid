@@ -214,28 +214,30 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
             result = await asyncio.create_subprocess_exec(
                 str(stop_script),
                 cwd=str(SCRIPT_DIR),
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
             try:
-                await asyncio.wait_for(result.wait(), timeout=15.0)
+                stdout, stderr = await asyncio.wait_for(result.communicate(), timeout=15.0)
+                if result.returncode != 0:
+                    print(f"Stop script warning: {stderr.decode()[:200]}")
             except asyncio.TimeoutError:
                 result.kill()
                 await result.wait()
             
             await asyncio.sleep(1)
         
-        # Run start script in background (fire and forget)
+        # Run start script and capture output for debugging
         script_path = SCRIPT_DIR / "start_all_services.sh"
         if not script_path.exists():
             raise HTTPException(status_code=500, detail="Start script not found")
         
-        # Start the script but don't wait for it to complete
+        # Start the script and capture output
         process = await asyncio.create_subprocess_exec(
             str(script_path),
             cwd=str(SCRIPT_DIR),
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             start_new_session=True  # Detach from parent process
         )
         
@@ -258,7 +260,10 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start services: {str(e)}")
+        import traceback
+        error_details = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+        print(f"Error in start_services: {error_details}")
+        raise HTTPException(status_code=500, detail=f"Failed to start services: {type(e).__name__}: {str(e) or 'Unknown error'}")
 
 @app.post("/api/services/stop", response_model=ServiceControlResponse)
 async def stop_services(x_service_pin: Optional[str] = Header(None)):
