@@ -195,14 +195,27 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
         raise HTTPException(status_code=403, detail="Invalid or missing PIN")
     
     try:
+        # Check if services are already running
+        current_status = {}
+        for service_id, config in SERVICES.items():
+            current_status[service_id] = get_service_status(service_id, config)
+        
+        # If all running, return success immediately
+        if all(svc.running for svc in current_status.values()):
+            return ServiceControlResponse(
+                success=True,
+                message="All services are already running",
+                services=current_status
+            )
+        
         # First, stop any running services to avoid port conflicts
         stop_script = SCRIPT_DIR / "stop_all_services.sh"
         if stop_script.exists():
             result = await asyncio.create_subprocess_exec(
                 str(stop_script),
                 cwd=str(SCRIPT_DIR),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL
             )
             try:
                 await asyncio.wait_for(result.wait(), timeout=15.0)
@@ -212,31 +225,22 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
             
             await asyncio.sleep(1)
         
-        # Run start script asynchronously
+        # Run start script in background (fire and forget)
         script_path = SCRIPT_DIR / "start_all_services.sh"
         if not script_path.exists():
             raise HTTPException(status_code=500, detail="Start script not found")
         
+        # Start the script but don't wait for it to complete
         process = await asyncio.create_subprocess_exec(
             str(script_path),
             cwd=str(SCRIPT_DIR),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            start_new_session=True  # Detach from parent process
         )
         
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=45.0)
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
-            raise HTTPException(status_code=500, detail="Start script timed out after 45 seconds")
-        
-        if process.returncode != 0:
-            error_msg = stderr.decode() if stderr else "Unknown error"
-            raise HTTPException(status_code=500, detail=f"Start script failed: {error_msg[:200]}")
-        
-        # Wait for services to initialize
-        await asyncio.sleep(3)
+        # Wait a short time for services to start
+        await asyncio.sleep(5)
         
         # Get updated status
         services = {}
@@ -247,7 +251,7 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
         
         return ServiceControlResponse(
             success=all_running,
-            message="Services started successfully" if all_running else "Some services failed to start",
+            message="Services started successfully" if all_running else "Services are starting (may take a moment)",
             services=services
         )
         

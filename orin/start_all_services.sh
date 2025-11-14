@@ -28,11 +28,15 @@ echo "Orin API Services - Unified Startup"
 echo "=========================================="
 echo
 
-# Install dependencies if needed
-echo "Installing/updating dependencies..."
-python3 -m pip install --user -q --upgrade pip
-python3 -m pip install --user -q -r requirements.txt
-echo "✓ Dependencies installed"
+# Check if dependencies are installed (skip if already present)
+if ! python3 -c "import fastapi, uvicorn" 2>/dev/null; then
+    echo "Installing/updating dependencies..."
+    python3 -m pip install --user -q --upgrade pip
+    python3 -m pip install --user -q -r requirements.txt
+    echo "✓ Dependencies installed"
+else
+    echo "✓ Dependencies already installed"
+fi
 echo
 
 # Check if ROS2 is available for Target API
