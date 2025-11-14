@@ -39,8 +39,9 @@ class OrinServiceRepository @Inject constructor(
             })
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = 30000
-            connectTimeoutMillis = 10000
+            requestTimeoutMillis = 60000  // 60 seconds for start/stop operations
+            connectTimeoutMillis = 15000  // 15 seconds to connect
+            socketTimeoutMillis = 60000   // 60 seconds socket timeout
         }
     }
 

@@ -198,30 +198,45 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
         # First, stop any running services to avoid port conflicts
         stop_script = SCRIPT_DIR / "stop_all_services.sh"
         if stop_script.exists():
-            subprocess.run(
-                [str(stop_script)],
+            result = await asyncio.create_subprocess_exec(
+                str(stop_script),
                 cwd=str(SCRIPT_DIR),
-                capture_output=True,
-                text=True,
-                timeout=10
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
+            try:
+                await asyncio.wait_for(result.wait(), timeout=15.0)
+            except asyncio.TimeoutError:
+                result.kill()
+                await result.wait()
+            
             await asyncio.sleep(1)
         
-        # Run start script
+        # Run start script asynchronously
         script_path = SCRIPT_DIR / "start_all_services.sh"
         if not script_path.exists():
             raise HTTPException(status_code=500, detail="Start script not found")
         
-        result = subprocess.run(
-            [str(script_path)],
+        process = await asyncio.create_subprocess_exec(
+            str(script_path),
             cwd=str(SCRIPT_DIR),
-            capture_output=True,
-            text=True,
-            timeout=30
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
         
-        # Wait a moment for services to initialize
-        await asyncio.sleep(2)
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=45.0)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            raise HTTPException(status_code=500, detail="Start script timed out after 45 seconds")
+        
+        if process.returncode != 0:
+            error_msg = stderr.decode() if stderr else "Unknown error"
+            raise HTTPException(status_code=500, detail=f"Start script failed: {error_msg[:200]}")
+        
+        # Wait for services to initialize
+        await asyncio.sleep(3)
         
         # Get updated status
         services = {}
@@ -236,8 +251,8 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
             services=services
         )
         
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Start script timed out")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start services: {str(e)}")
 
