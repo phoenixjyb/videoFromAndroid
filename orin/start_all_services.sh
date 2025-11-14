@@ -83,13 +83,36 @@ echo
 echo "$TARGET_PID" > .target_api.pid
 echo "$MEDIA_PID" > .media_api.pid
 
+# Start Camera Relay in background (ROS2 to WebSocket bridge)
+if [ "$ROS2_FLAG" = "--ros2" ]; then
+    echo "=========================================="
+    echo "Starting Camera Relay..."
+    echo "=========================================="
+    echo "  Phone: ${PHONE_IP}:9090/control"
+    echo "  ROS2 topics: /camera/*"
+    echo "  Logs: camera_relay.log"
+    env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ftp_proxy -u FTP_PROXY \
+        nohup python3 camera_control_relay.py --phone-host "${PHONE_IP}" --phone-port 9090 > camera_relay.log 2>&1 &
+    RELAY_PID=$!
+    echo "  PID: $RELAY_PID"
+    echo "✓ Camera Relay started"
+    echo "$RELAY_PID" > .camera_relay.pid
+    echo
+else
+    echo "⚠ Skipping Camera Relay (ROS2 not available)"
+    echo
+fi
+
 echo "=========================================="
 echo "✓ All services started successfully!"
 echo "=========================================="
 echo
 echo "Services running:"
-echo "  Target API: http://$(hostname -I | awk '{print $1}'):8080"
+echo "  Target API: http://$(hostname -I | awk '{print $1}'):8082"
 echo "  Media API:  http://$(hostname -I | awk '{print $1}'):8081"
+if [ "$ROS2_FLAG" = "--ros2" ]; then
+    echo "  Camera Relay: ROS2 /camera/* ↔ ${PHONE_IP}:9090"
+fi
 echo
 echo ""
 echo "To stop all services, run:"

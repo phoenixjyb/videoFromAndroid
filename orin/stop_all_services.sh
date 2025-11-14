@@ -86,6 +86,42 @@ if [ "$MEDIA_STOPPED" = false ]; then
 fi
 
 echo
+
+# Stop Camera Relay
+RELAY_STOPPED=false
+if [ -f .camera_relay.pid ]; then
+    RELAY_PID=$(cat .camera_relay.pid)
+    if ps -p $RELAY_PID > /dev/null 2>&1; then
+        echo "Stopping Camera Relay (PID: $RELAY_PID from PID file)..."
+        kill $RELAY_PID
+        sleep 0.5
+        # Force kill if still running
+        if ps -p $RELAY_PID > /dev/null 2>&1; then
+            kill -9 $RELAY_PID 2>/dev/null
+        fi
+        echo "✓ Camera Relay stopped"
+        RELAY_STOPPED=true
+    fi
+    rm -f .camera_relay.pid
+fi
+
+# If not stopped by PID file, try by process name
+if [ "$RELAY_STOPPED" = false ]; then
+    RELAY_PID=$(pgrep -f "camera_control_relay.py" 2>/dev/null)
+    if [ -n "$RELAY_PID" ]; then
+        echo "Found Camera Relay (PID: $RELAY_PID)"
+        kill $RELAY_PID 2>/dev/null
+        sleep 0.5
+        if ps -p $RELAY_PID > /dev/null 2>&1; then
+            kill -9 $RELAY_PID 2>/dev/null
+        fi
+        echo "✓ Camera Relay stopped"
+    else
+        echo "⚠ Camera Relay not running"
+    fi
+fi
+
+echo
 echo "=========================================="
 echo "✓ All services stopped"
 echo "=========================================="

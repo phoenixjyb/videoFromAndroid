@@ -47,6 +47,12 @@ SERVICES = {
         "log_file": SCRIPT_DIR / "media_api.log",
         "pid_file": SCRIPT_DIR / ".media_api.pid",
     },
+    "camera_relay": {
+        "name": "Camera Relay",
+        "port": None,  # No specific port, it's a ROS2 node
+        "log_file": SCRIPT_DIR / "camera_relay.log",
+        "pid_file": SCRIPT_DIR / ".camera_relay.pid",
+    },
 }
 
 app = FastAPI(
