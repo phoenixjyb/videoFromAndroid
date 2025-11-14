@@ -23,6 +23,27 @@ pip3 install fastapi uvicorn pydantic psutil 2>&1 | grep -v "already satisfied" 
 echo "✓ Dependencies installed"
 echo
 
+# Stop any existing processes on port 8083
+echo "Checking for existing services on port 8083..."
+EXISTING_PID=$(lsof -ti :8083 2>/dev/null)
+if [ -n "$EXISTING_PID" ]; then
+    echo "Found existing process (PID: $EXISTING_PID) - stopping it..."
+    kill -9 $EXISTING_PID 2>/dev/null || true
+    sleep 1
+    echo "✓ Existing process stopped"
+else
+    echo "✓ Port 8083 is free"
+fi
+echo
+
+# Stop existing systemd service if running
+if systemctl is-active --quiet recomo_service_control.service 2>/dev/null; then
+    echo "Stopping existing systemd service..."
+    systemctl stop recomo_service_control.service
+    echo "✓ Existing service stopped"
+fi
+echo
+
 # Copy service file to systemd
 echo "Installing systemd service..."
 cp "$SCRIPT_DIR/$SERVICE_FILE" "$SYSTEMD_PATH"
