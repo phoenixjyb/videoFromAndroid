@@ -227,19 +227,35 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
             
             await asyncio.sleep(1)
         
-        # Run start script and capture output for debugging
+        # Run start script completely detached using systemd-run
+        # This prevents processes from being killed when service restarts
         script_path = SCRIPT_DIR / "start_all_services.sh"
         if not script_path.exists():
             raise HTTPException(status_code=500, detail="Start script not found")
         
-        # Start the script and capture output
+        # Use systemd-run to start in a separate scope (not part of this service's cgroup)
+        # --scope creates a transient scope unit
+        # --user runs as current user (not root)
         process = await asyncio.create_subprocess_exec(
+            "systemd-run",
+            "--user",
+            "--scope",
+            "--unit=orin-services-start",
+            "bash",
             str(script_path),
             cwd=str(SCRIPT_DIR),
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            start_new_session=True  # Detach from parent process
+            stderr=asyncio.subprocess.PIPE
         )
+        
+        # Wait for systemd-run to complete (not the actual services)
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                print(f"systemd-run failed: {error_msg}")
+        except asyncio.TimeoutError:
+            print("systemd-run command timed out")
         
         # Wait a short time for services to start
         await asyncio.sleep(5)
