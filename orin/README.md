@@ -9,6 +9,11 @@ Control and process Android phone camera streams on Jetson Orin via WebSocket, R
 ./start_all_services.sh
 ```
 
+**Start all services + ROS bridge publisher:**
+```bash
+START_ROS_BRIDGE=1 ./start_all_services.sh
+```
+
 **Stop all services:**
 ```bash
 ./stop_all_services.sh
@@ -82,6 +87,8 @@ See [Architecture Reference](docs/reference/ARCHITECTURE.md) for detailed design
 | `start_target_api.sh` | Start only Target API (port 8082) |
 | `start_media_api.sh` | Start only Media API (port 8081) |
 | `start_camera_relay.sh` | Start only Camera Control Relay |
+| `start_ros_bridge.sh` | Launch ROS2 video bridge (ADB + ws_to_image) |
+| `stop_ros_bridge.sh` | Stop ROS2 video bridge and clean up ADB forwarding |
 | `test_target_api.py` | Test Target API with sample data |
 | `test_ws_connection.py` | Test WebSocket connection to phone |
 | `listen_target_roi.py` | Listen to /target_roi ROS2 topic |
@@ -114,17 +121,20 @@ See project root `config/` directory for network configuration details.
 
 ### Published by Orin
 
-- `/target_roi` - Target detection bounding boxes
-  - Type: `std_msgs/String`
-  - Format: JSON with x, y, width, height
+- `/target_roi` - Target detection bounding boxes (`sensor_msgs/RegionOfInterest`)
+- `/recomo/rgb` - Phone video frames (`sensor_msgs/Image`)
+- `/recomo/camera_info` - Intrinsics for the RGB stream (`sensor_msgs/CameraInfo`)
+- `/recomo/rgb/telemetry` - Encoder metadata (`std_msgs/String` JSON)
 
 ### Subscribed by Orin
 
-- `/phone_camera/zoom` - Zoom level (Float32)
-- `/phone_camera/switch` - Camera ID (Int32: 0=ultra, 1=wide, 2=tele)
-- `/phone_camera/ae_lock` - Auto-exposure lock (Bool)
-- `/phone_camera/awb_lock` - Auto white balance lock (Bool)
-- `/phone_camera/bitrate` - Video bitrate in Mbps (Float32)
+- `/recomo/film/zoom` - Zoom level (`std_msgs/Float32`)
+- `/recomo/film/switch` - Camera facing (`std_msgs/String`)
+- `/recomo/film/ae_lock` - Auto-exposure lock (`std_msgs/Bool`)
+- `/recomo/film/awb_lock` - Auto white balance lock (`std_msgs/Bool`)
+- `/recomo/film/bitrate` - Video bitrate in bits/sec (`std_msgs/Int32`)
+- `/recomo/film/codec` - Video codec selection (`std_msgs/String`)
+- `/recomo/film/key_frame` - Request key frame (`std_msgs/Empty`)
 
 ---
 

@@ -8,10 +8,12 @@ Remote control feature for starting/stopping Orin services directly from the Cam
 
 ### Backend (Orin)
 - **service_control_api.py**: FastAPI server exposing REST endpoints
+- **start_all_services.sh / stop_all_services.sh**: Manage Target API, Media API, Camera Relay
+- **start_ros_bridge.sh / stop_ros_bridge.sh**: Manage the ROS video bridge (ADB + ws_to_image)
 - **Port**: 8083
 - **Endpoints**:
   - `GET /api/services/status` - Get current service status
-  - `POST /api/services/start` - Start all services
+  - `POST /api/services/start` - Start all services (now includes ROS bridge by default)
   - `POST /api/services/stop` - Stop all services
   - `GET /api/services/logs/{service_id}` - Get recent log lines
 
@@ -36,6 +38,8 @@ cd /path/to/camControl/orin
 curl http://localhost:8083/api/services/status
 ```
 
+> **ADB requirement**: The ROS bridge relies on the Android phone being plugged into the Orin over USB with developer mode enabled. If ADB is unavailable, Target/Media APIs will still start, but the bridge status will show as stopped with log details in `ros_bridge.log`.
+
 ### On Tablet
 
 1. Configure network in Settings screen:
@@ -54,14 +58,14 @@ curl http://localhost:8083/api/services/status
 
 ### Service Status Cards
 - Green/Red indicator (running/stopped)
-- Service name (Target API, Media API)
-- Port number
+- Service name (Target API, Media API, Camera Relay, ROS Bridge)
+- Port number (if applicable)
 - PID (when running)
 - Uptime (formatted as hours/minutes/seconds)
 - Recent log lines (expandable)
 
 ### Control Buttons
-- **Start All**: Runs `start_all_services.sh`
+- **Start All**: Runs `start_all_services.sh` (exports `START_ROS_BRIDGE=1` by default)
 - **Stop All**: Runs `stop_all_services.sh` (only enabled when services running)
 - Loading indicator during operations
 - Error messages with dismiss button
@@ -124,7 +128,7 @@ curl http://localhost:8083/api/services/status
 - `camviewer/src/main/java/com/example/camviewer/ui/navigation/Screen.kt` - Navigation route
 - `camviewer/src/main/java/com/example/camviewer/ui/navigation/CamViewerNavHost.kt` - Navigation setup
 
-## Network Configuration
+### Network Configuration
 
 The service control API URL is derived from the Orin Target URL:
 - Extract IP from `orinTargetUrl` (e.g., `192.168.100.150` from `http://192.168.100.150:8082`)
@@ -134,6 +138,11 @@ The service control API URL is derived from the Orin Target URL:
 - **ZeroTier**: `http://192.168.100.150:8083`
 - **T8Space**: `http://172.16.30.234:8083`
 - **Custom**: Based on user-configured Orin IP
+
+### Environment flags
+
+- `SERVICE_CONTROL_START_ROS_BRIDGE=0` (host env) disables automatic ROS bridge start when CamViewer presses **Start All**.
+- `START_ROS_BRIDGE=1 ./start_all_services.sh` (manual shell) forces the ROS bridge to be launched alongside the APIs.
 
 ## Testing
 

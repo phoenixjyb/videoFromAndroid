@@ -11,6 +11,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+START_ROS_BRIDGE=${START_ROS_BRIDGE:-0}
+if [ "${1:-}" = "--with-ros-bridge" ]; then
+    START_ROS_BRIDGE=1
+    shift
+fi
+
 # Load network configuration
 if [ -f "../config/load_network_config.sh" ]; then
     source ../config/load_network_config.sh
@@ -107,6 +113,22 @@ else
     echo
 fi
 
+# Optionally start ROS bridge (video publisher)
+if [ "$START_ROS_BRIDGE" = "1" ]; then
+    echo "=========================================="
+    echo "Starting ROS Video Bridge..."
+    echo "=========================================="
+    if ./start_ros_bridge.sh; then
+        echo "✓ ROS video bridge launched"
+    else
+        echo "⚠ ROS video bridge failed to start (see ros_bridge.log for details)"
+    fi
+    echo
+else
+    echo "ℹ ROS video bridge disabled (set START_ROS_BRIDGE=1 or pass --with-ros-bridge to enable)"
+    echo
+fi
+
 echo "=========================================="
 echo "✓ All services started successfully!"
 echo "=========================================="
@@ -116,6 +138,9 @@ echo "  Target API: http://$(hostname -I | awk '{print $1}'):8082"
 echo "  Media API:  http://$(hostname -I | awk '{print $1}'):8081"
 if [ "$ROS2_FLAG" = "--ros2" ]; then
     echo "  Camera Relay: ROS2 /recomo/film/* ↔ ${PHONE_IP}:9090"
+fi
+if [ "$START_ROS_BRIDGE" = "1" ]; then
+    echo "  ROS Bridge:  localhost:${ROS_BRIDGE_LOCAL_PORT:-9100} → /recomo/rgb"
 fi
 echo
 echo ""

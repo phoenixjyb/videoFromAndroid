@@ -34,6 +34,9 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 # Service Control PIN (set via environment variable or leave empty to disable)
 SERVICE_PIN = os.environ.get("SERVICE_CONTROL_PIN", "")
 
+# Automatically start ROS bridge unless explicitly disabled
+AUTO_START_ROS_BRIDGE = os.environ.get("SERVICE_CONTROL_START_ROS_BRIDGE", "1")
+
 # Service configuration
 SERVICES = {
     "target_api": {
@@ -41,19 +44,31 @@ SERVICES = {
         "port": 8082,
         "log_file": SCRIPT_DIR / "target_api.log",
         "pid_file": SCRIPT_DIR / ".target_api.pid",
+        "check": "http"
     },
     "media_api": {
         "name": "Media API",
         "port": 8081,
         "log_file": SCRIPT_DIR / "media_api.log",
         "pid_file": SCRIPT_DIR / ".media_api.pid",
+        "check": "http"
     },
     "camera_relay": {
         "name": "Camera Relay",
         "port": None,  # No specific port, it's a ROS2 node
         "log_file": SCRIPT_DIR / "camera_relay.log",
         "pid_file": SCRIPT_DIR / ".camera_relay.pid",
+        "check": "ros_node",
+        "process_match": "camera_control_relay.py"
     },
+    "ros_bridge": {
+        "name": "ROS Bridge",
+        "port": None,
+        "log_file": SCRIPT_DIR / "ros_bridge.log",
+        "pid_file": SCRIPT_DIR / ".ros_bridge.pid",
+        "check": "ros_node",
+        "process_match": "ros2_camcontrol.ws_to_image"
+    }
 }
 
 app = FastAPI(
@@ -104,18 +119,17 @@ def is_port_listening(port: int) -> bool:
     except Exception:
         return False
 
-def is_ros2_node_healthy(pid: int, node_name: str = 'camera_control_relay') -> bool:
-    """Check if ROS2 node is actually running and healthy"""
+def process_matches(pid: int, expected_substring: Optional[str]) -> bool:
+    """Check if the process command line contains the expected substring"""
     if not is_process_running(pid):
         return False
-    
+    if not expected_substring:
+        return True
     try:
-        # Check if the process command line matches
         with open(f'/proc/{pid}/cmdline', 'r') as f:
             cmdline = f.read()
-            return 'camera_control_relay.py' in cmdline
+            return expected_substring in cmdline
     except Exception:
-        # Fallback: if we can't read cmdline, trust the PID check
         return True
 
 def get_service_status(service_id: str, config: dict) -> ServiceStatus:
@@ -126,17 +140,18 @@ def get_service_status(service_id: str, config: dict) -> ServiceStatus:
     last_logs = []
     
     # Check PID file
+    check_type = config.get("check", "process")
     if config["pid_file"].exists():
         try:
             pid = int(config["pid_file"].read_text().strip())
             
-            # Enhanced health check based on service type
-            if config["port"] is not None:
-                # HTTP service: check both process and port
-                running = is_process_running(pid) and is_port_listening(config["port"])
+            if check_type == "http":
+                port = config.get("port")
+                running = is_process_running(pid) and (port is None or is_port_listening(port))
+            elif check_type == "ros_node":
+                running = process_matches(pid, config.get("process_match"))
             else:
-                # ROS2 node: check process and verify it's the right one
-                running = is_ros2_node_healthy(pid)
+                running = is_process_running(pid)
             
             if not running:
                 pid = None
@@ -235,8 +250,9 @@ async def start_services(x_service_pin: Optional[str] = Header(None)):
         
         # Execute script in background, fully detached
         # Use bash -c with setsid and background to detach completely
+        bridge_env = "START_ROS_BRIDGE=1" if AUTO_START_ROS_BRIDGE not in ("0", "false", "False") else "START_ROS_BRIDGE=0"
         process = await asyncio.create_subprocess_shell(
-            f"bash -c 'cd {SCRIPT_DIR} && setsid ./start_all_services.sh </dev/null >/dev/null 2>&1 &'",
+            f"bash -c 'cd {SCRIPT_DIR} && {bridge_env} setsid ./start_all_services.sh </dev/null >/dev/null 2>&1 &'",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )

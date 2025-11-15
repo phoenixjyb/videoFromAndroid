@@ -92,6 +92,8 @@ These topics control the phone camera remotely from ROS2 nodes.
 
 These topics provide phone video as ROS2 Image messages.
 
+> Start the ROS bridge with `START_ROS_BRIDGE=1 ./start_all_services.sh` or by running `orin/start_ros_bridge.sh` directly. The service control API now launches it automatically when ADB is available.
+
 ### `/recomo/rgb`
 - **Type:** `sensor_msgs/Image`
 - **Purpose:** Main RGB video stream from phone
@@ -359,6 +361,7 @@ cd orin/
 ### Video Streaming
 - `orin/ros2_camcontrol/ros2_camcontrol/ws_to_image.py` - Video publisher node
 - `orin/start_phone_ros2_bridge.sh` - Launch phone→ROS2 bridge
+- `orin/start_ros_bridge.sh` - Background launcher for service control / remote start
 - `orin/ros2_camcontrol/launch/` - Launch files
 
 ### Target Tracking

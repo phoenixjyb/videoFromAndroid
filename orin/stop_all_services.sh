@@ -122,6 +122,16 @@ if [ "$RELAY_STOPPED" = false ]; then
 fi
 
 echo
+
+# Stop ROS bridge if running
+if [ -f .ros_bridge.pid ] || pgrep -f "ros2_camcontrol\.ws_to_image" >/dev/null 2>&1; then
+    echo "Stopping ROS video bridge..."
+    ./stop_ros_bridge.sh || true
+else
+    echo "ROS video bridge not running"
+fi
+
+echo
 echo "=========================================="
 echo "✓ All services stopped"
 echo "=========================================="
