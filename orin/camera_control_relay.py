@@ -7,13 +7,13 @@ camControl app via WebSocket. This allows downstream ROS2 nodes to control
 the camera by publishing to standard ROS2 topics.
 
 Control Topics:
-- /camera/zoom (std_msgs/Float32): Zoom ratio (1.0 - 10.0)
-- /camera/ae_lock (std_msgs/Bool): Auto Exposure lock
-- /camera/awb_lock (std_msgs/Bool): Auto White Balance lock
-- /camera/switch (std_msgs/String): Camera facing ("back" or "front")
-- /camera/bitrate (std_msgs/Int32): Bitrate in bits per second
-- /camera/codec (std_msgs/String): Codec ("h264" or "h265")
-- /camera/key_frame (std_msgs/Empty): Request key frame
+- /recomo/film/zoom (std_msgs/Float32): Zoom ratio (1.0 - 10.0)
+- /recomo/film/ae_lock (std_msgs/Bool): Auto Exposure lock
+- /recomo/film/awb_lock (std_msgs/Bool): Auto White Balance lock
+- /recomo/film/switch (std_msgs/String): Camera facing ("back" or "front")
+- /recomo/film/bitrate (std_msgs/Int32): Bitrate in bits per second
+- /recomo/film/codec (std_msgs/String): Codec ("h264" or "h265")
+- /recomo/film/key_frame (std_msgs/Empty): Request key frame
 
 Usage:
     python3 camera_control_relay.py --phone-host 172.16.30.28
@@ -68,49 +68,49 @@ class CameraControlRelay(Node):
         # Create subscriptions for camera control topics
         self.zoom_sub = self.create_subscription(
             Float32,
-            '/camera/zoom',
+            '/recomo/film/zoom',
             self._zoom_callback,
             10
         )
         
         self.ae_lock_sub = self.create_subscription(
             Bool,
-            '/camera/ae_lock',
+            '/recomo/film/ae_lock',
             self._ae_lock_callback,
             10
         )
         
         self.awb_lock_sub = self.create_subscription(
             Bool,
-            '/camera/awb_lock',
+            '/recomo/film/awb_lock',
             self._awb_lock_callback,
             10
         )
         
         self.switch_sub = self.create_subscription(
             String,
-            '/camera/switch',
+            '/recomo/film/switch',
             self._switch_callback,
             10
         )
         
         self.bitrate_sub = self.create_subscription(
             Int32,
-            '/camera/bitrate',
+            '/recomo/film/bitrate',
             self._bitrate_callback,
             10
         )
         
         self.codec_sub = self.create_subscription(
             String,
-            '/camera/codec',
+            '/recomo/film/codec',
             self._codec_callback,
             10
         )
         
         self.key_frame_sub = self.create_subscription(
             Empty,
-            '/camera/key_frame',
+            '/recomo/film/key_frame',
             self._key_frame_callback,
             10
         )
@@ -232,13 +232,13 @@ def main():
     
     logger.info('🚀 Camera Control Relay started')
     logger.info('📡 Listening for camera control commands on ROS2 topics...')
-    logger.info('   /camera/zoom (Float32)')
-    logger.info('   /camera/ae_lock (Bool)')
-    logger.info('   /camera/awb_lock (Bool)')
-    logger.info('   /camera/switch (String)')
-    logger.info('   /camera/bitrate (Int32)')
-    logger.info('   /camera/codec (String)')
-    logger.info('   /camera/key_frame (Empty)')
+    logger.info('   /recomo/film/zoom (Float32)')
+    logger.info('   /recomo/film/ae_lock (Bool)')
+    logger.info('   /recomo/film/awb_lock (Bool)')
+    logger.info('   /recomo/film/switch (String)')
+    logger.info('   /recomo/film/bitrate (Int32)')
+    logger.info('   /recomo/film/codec (String)')
+    logger.info('   /recomo/film/key_frame (Empty)')
     
     try:
         rclpy.spin(node)

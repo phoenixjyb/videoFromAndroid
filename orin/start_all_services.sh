@@ -93,7 +93,7 @@ if [ "$ROS2_FLAG" = "--ros2" ]; then
     echo "Starting Camera Relay..."
     echo "=========================================="
     echo "  Phone: ${PHONE_IP}:9090/control"
-    echo "  ROS2 topics: /camera/*"
+    echo "  ROS2 topics: /recomo/film/*"
     echo "  Logs: camera_relay.log"
     env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ftp_proxy -u FTP_PROXY \
         nohup python3 camera_control_relay.py --phone-host "${PHONE_IP}" --phone-port 9090 > camera_relay.log 2>&1 &
@@ -115,7 +115,7 @@ echo "Services running:"
 echo "  Target API: http://$(hostname -I | awk '{print $1}'):8082"
 echo "  Media API:  http://$(hostname -I | awk '{print $1}'):8081"
 if [ "$ROS2_FLAG" = "--ros2" ]; then
-    echo "  Camera Relay: ROS2 /camera/* ↔ ${PHONE_IP}:9090"
+    echo "  Camera Relay: ROS2 /recomo/film/* ↔ ${PHONE_IP}:9090"
 fi
 echo
 echo ""

@@ -1,13 +1,12 @@
 package com.example.camviewer.ui.screens.media
 
 import android.net.Uri
-import android.view.ViewGroup
-import android.widget.MediaController
-import android.widget.VideoView
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -24,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -38,6 +36,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.camviewer.data.model.MediaItem
 import com.example.camviewer.data.model.MediaType
+import androidx.media3.common.MediaItem as ExoMediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -59,6 +63,8 @@ fun MediaScreen(
     var selectedMedia by remember { mutableStateOf<MediaItem?>(null) }
     var mediaToDelete by remember { mutableStateOf<MediaItem?>(null) }
     var selectedTab by remember { mutableStateOf(MediaTab.LOCAL_RECORDINGS) }
+    var selectedLocalRecording by remember { mutableStateOf<File?>(null) }
+    val context = LocalContext.current
     
     Scaffold(
         topBar = {
@@ -85,7 +91,7 @@ fun MediaScreen(
                     // Show local recordings from /sdcard/Movies/recomoVideosRawStream/
                     LocalRecordingsContent(
                         recordings = localRecordings,
-                        onMediaClick = { /* TODO: Play local video */ },
+                        onMediaClick = { file -> selectedLocalRecording = file },
                         onDeleteClick = { viewModel.deleteLocalRecording(it) },
                         onRefresh = { viewModel.refreshLocalRecordings() }
                     )
@@ -104,8 +110,17 @@ fun MediaScreen(
                                 items = state.items,
                                 downloadProgress = downloadProgress,
                                 onMediaClick = { mediaItem ->
-                                    android.util.Log.e("MediaScreen", "onMediaClick called for: ${mediaItem.filename}")
-                                    selectedMedia = mediaItem
+                                    if (viewModel.isMediaDownloaded(mediaItem)) {
+                                        android.util.Log.e("MediaScreen", "onMediaClick called for downloaded media: ${mediaItem.filename}")
+                                        selectedMedia = mediaItem
+                                    } else {
+                                        android.util.Log.w("MediaScreen", "Attempted playback without download: ${mediaItem.filename}")
+                                        Toast.makeText(
+                                            context,
+                                            "Please download the video before playback",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 },
                                 onDownloadClick = { mediaItem ->
                                     viewModel.downloadMedia(mediaItem)
@@ -136,6 +151,13 @@ fun MediaScreen(
             mediaItem = media,
             onDismiss = { selectedMedia = null },
             getVideoFile = { viewModel.getMediaFile(it) }
+        )
+    }
+
+    selectedLocalRecording?.let { localFile ->
+        LocalVideoPlayerDialog(
+            file = localFile,
+            onDismiss = { selectedLocalRecording = null }
         )
     }
     
@@ -237,6 +259,7 @@ fun MediaGrid(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MediaCard(
     mediaItem: MediaItem,
@@ -246,37 +269,41 @@ fun MediaCard(
     onDownloadClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val interactionSource = remember { MutableInteractionSource() }
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f),
+            .aspectRatio(1f)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = rememberRipple(),
+                onClick = {
+                    android.util.Log.d(
+                        "MediaScreen",
+                        "Card tapped: ${mediaItem.filename}, downloaded: $isDownloaded"
+                    )
+                    onClick()
+                },
+                onLongClick = {
+                    android.util.Log.d(
+                        "MediaScreen",
+                        "Long press on: ${mediaItem.filename}, downloaded: $isDownloaded"
+                    )
+                    if (isDownloaded) {
+                        onDeleteClick()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Download the video before deleting",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Clickable thumbnail area (doesn't cover bottom-right corner where download button is)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 72.dp, end = 72.dp)  // Leave more space for download button
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = {
-                                android.util.Log.d("MediaScreen", "Thumbnail tapped: ${mediaItem.filename}, downloaded: $isDownloaded")
-                                onClick()
-                            },
-                            onLongPress = {
-                                android.util.Log.d("MediaScreen", "Long press detected on: ${mediaItem.filename}, isDownloaded: $isDownloaded")
-                                if (isDownloaded) {
-                                    android.util.Log.d("MediaScreen", "Long press on downloaded video: ${mediaItem.filename}")
-                                    onDeleteClick()
-                                } else {
-                                    android.util.Log.d("MediaScreen", "Long press ignored - video not downloaded: ${mediaItem.filename}")
-                                }
-                            }
-                        )
-                    }
-            )
-            
             // Thumbnail
             if (mediaItem.thumbnailUrl != null) {
                 android.util.Log.d("MediaScreen", "Loading thumbnail for ${mediaItem.filename}: ${mediaItem.thumbnailUrl}")
@@ -567,14 +594,73 @@ fun VideoPlayerDialog(
     getVideoFile: (MediaItem) -> File?
 ) {
     val videoFile = getVideoFile(mediaItem)
-    
+    FileVideoPlayerDialog(
+        title = mediaItem.filename,
+        videoFile = videoFile,
+        onDismiss = onDismiss,
+        emptyMessage = "Video file not found. Please download again."
+    )
+}
+
+@Composable
+fun LocalVideoPlayerDialog(
+    file: File,
+    onDismiss: () -> Unit
+) {
+    FileVideoPlayerDialog(
+        title = file.name,
+        videoFile = file,
+        onDismiss = onDismiss,
+        emptyMessage = "Local video file not available"
+    )
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+private fun FileVideoPlayerDialog(
+    title: String,
+    videoFile: File?,
+    onDismiss: () -> Unit,
+    emptyMessage: String
+) {
+    val context = LocalContext.current
+    val videoUri = remember(videoFile?.absolutePath) {
+        videoFile?.takeIf { it.exists() }?.let { Uri.fromFile(it) }
+    }
+    var playbackError by remember(videoUri) { mutableStateOf<String?>(null) }
+    val exoPlayer = remember(videoUri) {
+        videoUri?.let { uri ->
+            ExoPlayer.Builder(context).build().apply {
+                val mediaItem = ExoMediaItem.fromUri(uri)
+                setMediaItem(mediaItem)
+                playWhenReady = true
+                prepare()
+            }
+        }
+    }
+
+    DisposableEffect(exoPlayer) {
+        val player = exoPlayer
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                playbackError = error.localizedMessage ?: "无法播放此视频"
+                Toast.makeText(context, "无法播放此视频", Toast.LENGTH_SHORT).show()
+            }
+        }
+        player?.addListener(listener)
+        onDispose {
+            player?.removeListener(listener)
+            player?.release()
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             dismissOnBackPress = true,
-            dismissOnClickOutside = false,  // Prevent accidental dismissal
+            dismissOnClickOutside = false,
             usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false  // Allow fullscreen
+            decorFitsSystemWindows = false
         )
     ) {
         Box(
@@ -582,43 +668,34 @@ fun VideoPlayerDialog(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // Video player - fills entire screen
-            if (videoFile != null && videoFile.exists()) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { context ->
-                        VideoView(context).apply {
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT
-                            )
-                            setVideoURI(Uri.fromFile(videoFile))
-                            
-                            // Add media controller (play/pause/seek controls)
-                            val mediaController = MediaController(context)
-                            mediaController.setAnchorView(this)
-                            setMediaController(mediaController)
-                            
-                            // Auto-start playback
-                            setOnPreparedListener { player ->
-                                player.start()
+            when {
+                videoUri == null -> {
+                    MissingVideoMessage(message = emptyMessage)
+                }
+                playbackError != null -> {
+                    MissingVideoMessage(message = playbackError ?: emptyMessage)
+                }
+                exoPlayer != null -> {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                useController = true
+                                player = exoPlayer
+                            }
+                        },
+                        update = { view: PlayerView ->
+                            if (view.player !== exoPlayer) {
+                                view.player = exoPlayer
                             }
                         }
-                    }
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Video file not found",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge
                     )
                 }
+                else -> {
+                    MissingVideoMessage(message = emptyMessage)
+                }
             }
-            
+
             // Transparent title bar overlay
             Row(
                 modifier = Modifier
@@ -637,7 +714,7 @@ fun VideoPlayerDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = mediaItem.filename,
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
                     maxLines = 1,
@@ -653,6 +730,22 @@ fun VideoPlayerDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MissingVideoMessage(message: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = message,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(24.dp)
+        )
     }
 }
 

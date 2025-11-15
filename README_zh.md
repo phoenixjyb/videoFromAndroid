@@ -53,7 +53,7 @@
 ┌────────┐ ┌──────┐ ┌─────────┐     ┌──────────────┐
 │WebUI   │ │平板  │ │ Orin    │     │ ROS2 话题    │
 │浏览器  │ │应用  │ │ 接收    │     │              │
-│        │ │      │ │         │     │ /camera/zoom │
+│        │ │      │ │         │     │ /recomo/film/zoom│
 │控制    │ │视频  │ │ROS2 发布│◄────┤ /camera/ae   │
 │+ 查看  │ │查看  │ │         │     │ /camera/awb  │
 │        │ │控制  │ │         │     │ /camera/...  │
@@ -129,8 +129,8 @@ cd orin/
 ./start_camera_relay.sh --phone-host <phone-ip>
 
 # 测试控制
-ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 3.0"
-ros2 topic pub --once /camera/switch std_msgs/String "data: 'front'"
+ros2 topic pub --once /recomo/film/zoom std_msgs/Float32 "data: 3.0"
+ros2 topic pub --once /recomo/film/switch std_msgs/String "data: 'front'"
 ```
 
 ## 相机控制命令
@@ -149,13 +149,13 @@ ros2 topic pub --once /camera/switch std_msgs/String "data: 'front'"
 
 ### ROS2 控制话题
 ```bash
-/camera/zoom       std_msgs/Float32    # 1.0 - 10.0
-/camera/ae_lock    std_msgs/Bool       # 自动曝光锁定
-/camera/awb_lock   std_msgs/Bool       # 自动白平衡锁定
-/camera/switch     std_msgs/String     # "back" 或 "front"
-/camera/bitrate    std_msgs/Int32      # 比特/秒
-/camera/codec      std_msgs/String     # "h264" 或 "h265"
-/camera/key_frame  std_msgs/Empty      # 请求关键帧
+/recomo/film/zoom       std_msgs/Float32    # 1.0 - 10.0
+/recomo/film/ae_lock    std_msgs/Bool       # 自动曝光锁定
+/recomo/film/awb_lock   std_msgs/Bool       # 自动白平衡锁定
+/recomo/film/switch     std_msgs/String     # "back" 或 "front"
+/recomo/film/bitrate    std_msgs/Int32      # 比特/秒
+/recomo/film/codec      std_msgs/String     # "h264" 或 "h265"
+/recomo/film/key_frame  std_msgs/Empty      # 请求关键帧
 ```
 
 ## Orin 服务管理

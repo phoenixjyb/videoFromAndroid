@@ -37,7 +37,7 @@ Remote-control Android phone camera with real-time H.265 video streaming and thr
 ┌────────┐ ┌──────┐ ┌─────────┐     ┌──────────────┐
 │WebUI   │ │Tablet│ │ Orin    │     │ ROS2 Topics  │
 │Browser │ │App   │ │ Ingest  │     │              │
-│        │ │      │ │         │     │ /camera/zoom │
+│        │ │      │ │         │     │ /recomo/film/zoom│
 │Control │ │Video │ │ROS2 Pub │◄────┤ /camera/ae   │
 │+ View  │ │View  │ │         │     │ /camera/awb  │
 │        │ │Control│ │         │     │ /camera/...  │
@@ -95,8 +95,8 @@ cd orin/
 ./start_camera_relay.sh --phone-host <phone-ip>
 
 # Test controls
-ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 3.0"
-ros2 topic pub --once /camera/switch std_msgs/String "data: 'front'"
+ros2 topic pub --once /recomo/film/zoom std_msgs/Float32 "data: 3.0"
+ros2 topic pub --once /recomo/film/switch std_msgs/String "data: 'front'"
 ```
 
 ## Camera Control Commands
@@ -115,13 +115,13 @@ All commands use JSON with `"cmd"` discriminator field:
 
 ### ROS2 Control Topics
 ```bash
-/camera/zoom       std_msgs/Float32    # 1.0 - 10.0
-/camera/ae_lock    std_msgs/Bool       # Auto exposure lock
-/camera/awb_lock   std_msgs/Bool       # Auto white balance lock
-/camera/switch     std_msgs/String     # "back" or "front"
-/camera/bitrate    std_msgs/Int32      # bits/second
-/camera/codec      std_msgs/String     # "h264" or "h265"
-/camera/key_frame  std_msgs/Empty      # Request keyframe
+/recomo/film/zoom       std_msgs/Float32    # 1.0 - 10.0
+/recomo/film/ae_lock    std_msgs/Bool       # Auto exposure lock
+/recomo/film/awb_lock   std_msgs/Bool       # Auto white balance lock
+/recomo/film/switch     std_msgs/String     # "back" or "front"
+/recomo/film/bitrate    std_msgs/Int32      # bits/second
+/recomo/film/codec      std_msgs/String     # "h264" or "h265"
+/recomo/film/key_frame  std_msgs/Empty      # Request keyframe
 ```
 - Troubleshooting:
   - Ensure app in foreground; `adb forward` active.

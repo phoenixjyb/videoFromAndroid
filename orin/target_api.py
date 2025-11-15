@@ -96,11 +96,11 @@ class TargetPublisher(Node):
         # Subscribe to downstream RGB camera_info to get target resolution
         self.rgb_camera_info_sub = self.create_subscription(
             CameraInfo,
-            '/recomo/rgb/camera_info',
+            '/recomo/target/camera_info',
             self._rgb_camera_info_callback,
             qos_profile_sensor_data
         )
-        self.get_logger().info('Subscribed to /recomo/rgb/camera_info for target resolution')
+        self.get_logger().info('Subscribed to /recomo/target/camera_info for target resolution')
         
         # Subscribe to telemetry for debugging (optional)
         telemetry_qos = QoSProfile(
@@ -143,13 +143,13 @@ class TargetPublisher(Node):
             self.get_logger().warn(f'Invalid camera_info dimensions: {width}x{height}')
     
     def _rgb_camera_info_callback(self, msg: 'CameraInfo'):
-        """Extract target resolution from /recomo/rgb/camera_info"""
+        """Extract target resolution from /recomo/target/camera_info"""
         width = msg.width
         height = msg.height
         
         if width > 0 and height > 0:
             if self.target_width != width or self.target_height != height:
-                self.get_logger().info(f'Target resolution updated from /recomo/rgb: {width}x{height}')
+                self.get_logger().info(f'Target resolution updated from /recomo/target: {width}x{height}')
             self.target_width = width
             self.target_height = height
         else:

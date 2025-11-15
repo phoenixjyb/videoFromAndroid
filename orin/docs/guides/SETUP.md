@@ -98,13 +98,13 @@ You should see:
 ```
 [INFO] Camera Control Relay initialized
 [INFO] Phone WebSocket: ws://172.16.30.28:8080/control
-[INFO] Subscribed to /camera/zoom
-[INFO] Subscribed to /camera/ae_lock
-[INFO] Subscribed to /camera/awb_lock
-[INFO] Subscribed to /camera/switch
-[INFO] Subscribed to /camera/bitrate
-[INFO] Subscribed to /camera/codec
-[INFO] Subscribed to /camera/key_frame
+[INFO] Subscribed to /recomo/film/zoom
+[INFO] Subscribed to /recomo/film/ae_lock
+[INFO] Subscribed to /recomo/film/awb_lock
+[INFO] Subscribed to /recomo/film/switch
+[INFO] Subscribed to /recomo/film/bitrate
+[INFO] Subscribed to /recomo/film/codec
+[INFO] Subscribed to /recomo/film/key_frame
 ```
 
 ### 4. Verify ROS2 Topics
@@ -113,23 +113,23 @@ In another terminal, check that topics are available:
 
 ```bash
 # List all camera control topics
-ros2 topic list | grep camera
+ros2 topic list | grep recomo/film
 
 # You should see:
-# /camera/zoom
-# /camera/ae_lock
-# /camera/awb_lock
-# /camera/switch
-# /camera/bitrate
-# /camera/codec
-# /camera/key_frame
+# /recomo/film/zoom
+# /recomo/film/ae_lock
+# /recomo/film/awb_lock
+# /recomo/film/switch
+# /recomo/film/bitrate
+# /recomo/film/codec
+# /recomo/film/key_frame
 ```
 
 ### 5. Test Camera Control
 
 #### Test Zoom Control
 ```bash
-ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 2.5"
+ros2 topic pub --once /recomo/film/zoom std_msgs/Float32 "data: 2.5"
 ```
 
 **Expected relay output:**
@@ -147,7 +147,7 @@ ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 2.5"
 
 #### Test Auto-Exposure Lock
 ```bash
-ros2 topic pub --once /camera/ae_lock std_msgs/Bool "data: true"
+ros2 topic pub --once /recomo/film/ae_lock std_msgs/Bool "data: true"
 ```
 
 **Expected relay output:**
@@ -160,10 +160,10 @@ ros2 topic pub --once /camera/ae_lock std_msgs/Bool "data: true"
 #### Test Camera Switch
 ```bash
 # Switch to front camera
-ros2 topic pub --once /camera/switch std_msgs/String "data: 'front'"
+ros2 topic pub --once /recomo/film/switch std_msgs/String "data: 'front'"
 
 # Switch back to rear camera
-ros2 topic pub --once /camera/switch std_msgs/String "data: 'back'"
+ros2 topic pub --once /recomo/film/switch std_msgs/String "data: 'back'"
 ```
 
 **Expected relay output:**
@@ -346,13 +346,13 @@ adb logcat | grep "ControlServer\|CamControlService\|Camera2Controller"
 ### Monitor ROS2 topics
 ```bash
 # See all messages on zoom topic
-ros2 topic echo /camera/zoom
+ros2 topic echo /recomo/film/zoom
 
 # Check topic info
-ros2 topic info /camera/zoom
+ros2 topic info /recomo/film/zoom
 
 # Check topic frequency
-ros2 topic hz /camera/zoom
+ros2 topic hz /recomo/film/zoom
 ```
 
 ## Example Integration Script
@@ -370,9 +370,9 @@ class AutoCameraController(Node):
         super().__init__('auto_camera_controller')
         
         # Publishers for camera control
-        self.zoom_pub = self.create_publisher(Float32, '/camera/zoom', 10)
-        self.ae_lock_pub = self.create_publisher(Bool, '/camera/ae_lock', 10)
-        self.bitrate_pub = self.create_publisher(Int32, '/camera/bitrate', 10)
+        self.zoom_pub = self.create_publisher(Float32, '/recomo/film/zoom', 10)
+        self.ae_lock_pub = self.create_publisher(Bool, '/recomo/film/ae_lock', 10)
+        self.bitrate_pub = self.create_publisher(Int32, '/recomo/film/bitrate', 10)
         
         # Timer to adjust zoom based on some logic
         self.timer = self.create_timer(5.0, self.control_callback)
@@ -410,14 +410,14 @@ python3 auto_camera_controller.py
 - [ ] Phone connectivity verified (`ping 172.16.30.28`)
 - [ ] Phone WebSocket port accessible (`telnet 172.16.30.28 8080`)
 - [ ] Camera control relay starts without errors
-- [ ] ROS2 topics visible (`ros2 topic list | grep camera`)
-- [ ] Zoom control works (`ros2 topic pub /camera/zoom ...`)
-- [ ] AE lock works (`ros2 topic pub /camera/ae_lock ...`)
-- [ ] AWB lock works (`ros2 topic pub /camera/awb_lock ...`)
-- [ ] Camera switch works (`ros2 topic pub /camera/switch ...`)
-- [ ] Bitrate change works (`ros2 topic pub /camera/bitrate ...`)
-- [ ] Codec change works (`ros2 topic pub /camera/codec ...`)
-- [ ] Key frame request works (`ros2 topic pub /camera/key_frame ...`)
+- [ ] ROS2 topics visible (`ros2 topic list | grep recomo/film`)
+- [ ] Zoom control works (`ros2 topic pub /recomo/film/zoom ...`)
+- [ ] AE lock works (`ros2 topic pub /recomo/film/ae_lock ...`)
+- [ ] AWB lock works (`ros2 topic pub /recomo/film/awb_lock ...`)
+- [ ] Camera switch works (`ros2 topic pub /recomo/film/switch ...`)
+- [ ] Bitrate change works (`ros2 topic pub /recomo/film/bitrate ...`)
+- [ ] Codec change works (`ros2 topic pub /recomo/film/codec ...`)
+- [ ] Key frame request works (`ros2 topic pub /recomo/film/key_frame ...`)
 - [ ] Phone logs show commands being received
 - [ ] Camera actually responds to commands (visible in video stream)
 
@@ -425,7 +425,7 @@ python3 auto_camera_controller.py
 
 Once the relay is working:
 
-1. **Integrate with your ROS2 application** - publish to `/camera/*` topics from your nodes
+1. **Integrate with your ROS2 application** - publish to `/recomo/film/*` topics from your nodes
 2. **Create launch files** - automate starting all services together
 3. **Add monitoring** - create a node that monitors camera state
 4. **Implement feedback** - consider adding a ROS2 service for command acknowledgment

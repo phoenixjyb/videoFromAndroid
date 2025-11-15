@@ -18,69 +18,69 @@ The system uses ROS2 topics for three main purposes:
 
 These topics control the phone camera remotely from ROS2 nodes.
 
-### `/camera/zoom`
+### `/recomo/film/zoom`
 - **Type:** `std_msgs/Float32`
 - **Purpose:** Control camera zoom level
 - **Range:** 1.0 (no zoom) to 10.0 (maximum zoom)
 - **Example:**
   ```bash
-  ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 2.5"
+  ros2 topic pub --once /recomo/film/zoom std_msgs/Float32 "data: 2.5"
   ```
 
-### `/camera/ae_lock`
+### `/recomo/film/ae_lock`
 - **Type:** `std_msgs/Bool`
 - **Purpose:** Lock/unlock auto-exposure
 - **Values:** `true` (locked), `false` (unlocked)
 - **Example:**
   ```bash
-  ros2 topic pub --once /camera/ae_lock std_msgs/Bool "data: true"
+  ros2 topic pub --once /recomo/film/ae_lock std_msgs/Bool "data: true"
   ```
 
-### `/camera/awb_lock`
+### `/recomo/film/awb_lock`
 - **Type:** `std_msgs/Bool`
 - **Purpose:** Lock/unlock auto white balance
 - **Values:** `true` (locked), `false` (unlocked)
 - **Example:**
   ```bash
-  ros2 topic pub --once /camera/awb_lock std_msgs/Bool "data: false"
+  ros2 topic pub --once /recomo/film/awb_lock std_msgs/Bool "data: false"
   ```
 
-### `/camera/switch`
+### `/recomo/film/switch`
 - **Type:** `std_msgs/String`
 - **Purpose:** Switch between front/back cameras
 - **Values:** `"back"`, `"front"`
 - **Example:**
   ```bash
-  ros2 topic pub --once /camera/switch std_msgs/String "data: 'front'"
+  ros2 topic pub --once /recomo/film/switch std_msgs/String "data: 'front'"
   ```
 
-### `/camera/bitrate`
+### `/recomo/film/bitrate`
 - **Type:** `std_msgs/Int32`
 - **Purpose:** Set video encoder bitrate
 - **Range:** 2,000,000 to 50,000,000 bits/second (2-50 Mbps)
 - **Default:** ~8,200,000 (8.2 Mbps for 1080p H.265)
 - **Example:**
   ```bash
-  ros2 topic pub --once /camera/bitrate std_msgs/Int32 "data: 15000000"
+  ros2 topic pub --once /recomo/film/bitrate std_msgs/Int32 "data: 15000000"
   ```
 
-### `/camera/codec`
+### `/recomo/film/codec`
 - **Type:** `std_msgs/String`
 - **Purpose:** Switch video codec
 - **Values:** `"h264"`, `"h265"`
 - **Default:** `"h265"`
 - **Example:**
   ```bash
-  ros2 topic pub --once /camera/codec std_msgs/String "data: 'h264'"
+  ros2 topic pub --once /recomo/film/codec std_msgs/String "data: 'h264'"
   ```
 
-### `/camera/key_frame`
+### `/recomo/film/key_frame`
 - **Type:** `std_msgs/Empty`
 - **Purpose:** Request immediate keyframe (I-frame) generation
 - **Use Case:** Reduce latency for new video subscribers
 - **Example:**
   ```bash
-  ros2 topic pub --once /camera/key_frame std_msgs/Empty
+  ros2 topic pub --once /recomo/film/key_frame std_msgs/Empty
   ```
 
 ---
@@ -144,22 +144,22 @@ These topics provide phone video as ROS2 Image messages.
 ### Subscribers: `ws_to_image` node
 These are alternative command topics namespaced under the video topic.
 
-**Note:** The `/camera/*` topics (via `camera_control_relay.py`) are now the **preferred** method for camera control. These topics are legacy from the older architecture.
+**Note:** The `/recomo/film/*` topics (via `camera_control_relay.py`) are now the **preferred** method for camera control. These topics are legacy from the older architecture.
 
 ### `/recomo/rgb/cmd/zoom`
 - **Type:** `std_msgs/String`
 - **Purpose:** Zoom control (legacy)
-- **Prefer:** Use `/camera/zoom` instead
+- **Prefer:** Use `/recomo/film/zoom` instead
 
 ### `/recomo/rgb/cmd/camera`
 - **Type:** `std_msgs/String`
 - **Purpose:** Camera switch (legacy)
-- **Prefer:** Use `/camera/switch` instead
+- **Prefer:** Use `/recomo/film/switch` instead
 
 ### `/recomo/rgb/cmd/lock`
 - **Type:** `std_msgs/String`
 - **Purpose:** AE/AWB lock (legacy)
-- **Prefer:** Use `/camera/ae_lock` and `/camera/awb_lock` instead
+- **Prefer:** Use `/recomo/film/ae_lock` and `/recomo/film/awb_lock` instead
 
 ### `/recomo/rgb/cmd/profile`
 - **Type:** `std_msgs/String`
@@ -174,7 +174,7 @@ These are alternative command topics namespaced under the video topic.
 ### `/recomo/rgb/cmd/keyframe`
 - **Type:** `std_msgs/String`
 - **Purpose:** Keyframe request (legacy)
-- **Prefer:** Use `/camera/key_frame` instead
+- **Prefer:** Use `/recomo/film/key_frame` instead
 
 ---
 
@@ -216,7 +216,7 @@ The Target API subscribes to these to transform coordinates:
 - **Purpose:** Source video resolution (phone camera)
 - **Used for:** Converting normalized ROI to pixel coordinates
 
-#### `/recomo/rgb/camera_info`
+#### `/recomo/target/camera_info`
 - **Purpose:** Target video resolution (downstream processing)
 - **Used for:** ROI coordinate transformation for downscaled images
 
@@ -242,13 +242,13 @@ The Target API subscribes to these to transform coordinates:
           │ Publishes                │ Subscribes
           │                          │
           ▼                          ▼
-  /recomo/rgb             /camera/zoom
-  /recomo/camera_info     /camera/ae_lock
-  /recomo/rgb/telemetry   /camera/awb_lock
-                          /camera/switch
-                          /camera/bitrate
-                          /camera/codec
-                          /camera/key_frame
+  /recomo/rgb             /recomo/film/zoom
+  /recomo/camera_info     /recomo/film/ae_lock
+  /recomo/rgb/telemetry   /recomo/film/awb_lock
+                          /recomo/film/switch
+                          /recomo/film/bitrate
+                          /recomo/film/codec
+                          /recomo/film/key_frame
 
 ┌──────────────────────────────────────────────────────────┐
 │                  CamViewer (Tablet)                      │
@@ -278,13 +278,13 @@ The Target API subscribes to these to transform coordinates:
 
 | Topic | Type | Publisher | Purpose | QoS |
 |-------|------|-----------|---------|-----|
-| `/camera/zoom` | Float32 | User/Relay | Zoom control | Default |
-| `/camera/ae_lock` | Bool | User/Relay | AE lock | Default |
-| `/camera/awb_lock` | Bool | User/Relay | AWB lock | Default |
-| `/camera/switch` | String | User/Relay | Camera switch | Default |
-| `/camera/bitrate` | Int32 | User/Relay | Bitrate control | Default |
-| `/camera/codec` | String | User/Relay | Codec selection | Default |
-| `/camera/key_frame` | Empty | User/Relay | Keyframe request | Default |
+| `/recomo/film/zoom` | Float32 | User/Relay | Zoom control | Default |
+| `/recomo/film/ae_lock` | Bool | User/Relay | AE lock | Default |
+| `/recomo/film/awb_lock` | Bool | User/Relay | AWB lock | Default |
+| `/recomo/film/switch` | String | User/Relay | Camera switch | Default |
+| `/recomo/film/bitrate` | Int32 | User/Relay | Bitrate control | Default |
+| `/recomo/film/codec` | String | User/Relay | Codec selection | Default |
+| `/recomo/film/key_frame` | Empty | User/Relay | Keyframe request | Default |
 | `/recomo/rgb` | Image | ws_to_image | Video stream | BEST_EFFORT |
 | `/recomo/camera_info` | CameraInfo | ws_to_image | Camera metadata | BEST_EFFORT |
 | `/recomo/rgb/telemetry` | String | ws_to_image | Phone telemetry | BEST_EFFORT |
@@ -297,16 +297,16 @@ The Target API subscribes to these to transform coordinates:
 ### 1. Camera Control from Command Line
 ```bash
 # Switch to front camera and zoom in
-ros2 topic pub --once /camera/switch std_msgs/String "data: 'front'"
+ros2 topic pub --once /recomo/film/switch std_msgs/String "data: 'front'"
 sleep 1
-ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 3.0"
+ros2 topic pub --once /recomo/film/zoom std_msgs/Float32 "data: 3.0"
 
 # Lock exposure and white balance
-ros2 topic pub --once /camera/ae_lock std_msgs/Bool "data: true"
-ros2 topic pub --once /camera/awb_lock std_msgs/Bool "data: true"
+ros2 topic pub --once /recomo/film/ae_lock std_msgs/Bool "data: true"
+ros2 topic pub --once /recomo/film/awb_lock std_msgs/Bool "data: true"
 
 # Increase bitrate for high quality
-ros2 topic pub --once /camera/bitrate std_msgs/Int32 "data: 20000000"
+ros2 topic pub --once /recomo/film/bitrate std_msgs/Int32 "data: 20000000"
 ```
 
 ### 2. Monitor Video Stream
@@ -374,7 +374,7 @@ cd orin/
 
 ## Best Practices
 
-1. **Use `/camera/*` topics for camera control** - Preferred over legacy `/recomo/rgb/cmd/*`
+1. **Use `/recomo/film/*` topics for camera control** - Preferred over legacy `/recomo/rgb/cmd/*`
 2. **BEST_EFFORT QoS for video** - Reduces latency, drops old frames
 3. **Request keyframes** - Before recording or when new subscribers join
 4. **Monitor telemetry** - Check encoder health and camera state
@@ -391,10 +391,10 @@ cd orin/
 ps aux | grep camera_control_relay
 
 # Check topic subscriptions
-ros2 topic info /camera/zoom
+ros2 topic info /recomo/film/zoom
 
 # Test manually
-ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 2.0"
+ros2 topic pub --once /recomo/film/zoom std_msgs/Float32 "data: 2.0"
 ```
 
 ### No video on /recomo/rgb

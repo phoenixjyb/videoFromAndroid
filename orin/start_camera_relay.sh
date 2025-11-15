@@ -19,7 +19,7 @@ fi
 # Start the relay
 echo "🚀 Starting camera control relay..."
 echo "📡 Phone: $PHONE_IP:$PHONE_PORT/control"
-echo "🔍 ROS2 topics: /camera/*"
+echo "🔍 ROS2 topics: /recomo/film/*"
 echo ""
 echo "Note: Starting without proxy environment variables to allow WebSocket connections"
 

@@ -50,14 +50,14 @@ Remote-control Android phone camera with real-time H.265 video streaming and thr
     ┌────────┼──────────┬─────────────────────┐
     │        │          │                     │
     ▼        ▼          ▼                     ▼
-┌────────┐ ┌──────┐ ┌─────────┐     ┌──────────────┐
-│WebUI   │ │Tablet│ │ Orin    │     │ ROS2 Topics  │
-│Browser │ │App   │ │ Ingest  │     │              │
-│        │ │      │ │         │     │ /camera/zoom │
-│Control │ │Video │ │ROS2 Pub │◄────┤ /camera/ae   │
-│+ View  │ │View  │ │         │     │ /camera/awb  │
-│        │ │Control│ │         │     │ /camera/...  │
-└────────┘ └──────┘ └─────────┘     └──────────────┘
+┌────────┐ ┌──────┐ ┌─────────┐     ┌──────────────────┐
+│WebUI   │ │Tablet│ │ Orin    │     │ ROS2 Topics      │
+│Browser │ │App   │ │ Ingest  │     │                  │
+│        │ │      │ │         │     │ /recomo/film/zoom│
+│Control │ │Video │ │ROS2 Pub │◄────┤ /recomo/film/ae  │
+│+ View  │ │View  │ │         │     │ /recomo/film/awb │
+│        │ │Control│ │         │     │ /recomo/film/... │
+└────────┘ └──────┘ └─────────┘     └──────────────────┘
                                              ▲
                                              │
                                      camera_control_relay.py
@@ -66,7 +66,7 @@ Remote-control Android phone camera with real-time H.265 video streaming and thr
 **Three-Way Camera Control:**
 1. **WebUI** (`http://phone-ip:9090/`) - Browser-based viewer with controls
 2. **CamViewer Developer Mode** - Tablet app UI (zoom, camera switch, bitrate, codec)
-3. **ROS2 Topics** - Publish to `/camera/*` topics on Orin, relay forwards to phone
+3. **ROS2 Topics** - Publish to `/recomo/film/*` topics on Orin, relay forwards to phone
 
 **Video Flow:**
 - Phone encodes H.265 → broadcasts to all WebSocket clients
@@ -129,8 +129,8 @@ cd orin/
 ./start_camera_relay.sh --phone-host <phone-ip>
 
 # Test controls
-ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 3.0"
-ros2 topic pub --once /camera/switch std_msgs/String "data: 'front'"
+ros2 topic pub --once /recomo/film/zoom std_msgs/Float32 "data: 3.0"
+ros2 topic pub --once /recomo/film/switch std_msgs/String "data: 'front'"
 ```
 
 ## Camera Control Commands
@@ -149,13 +149,13 @@ All commands use JSON with `"cmd"` discriminator field:
 
 ### ROS2 Control Topics
 ```bash
-/camera/zoom       std_msgs/Float32    # 1.0 - 10.0
-/camera/ae_lock    std_msgs/Bool       # Auto exposure lock
-/camera/awb_lock   std_msgs/Bool       # Auto white balance lock
-/camera/switch     std_msgs/String     # "back" or "front"
-/camera/bitrate    std_msgs/Int32      # bits/second
-/camera/codec      std_msgs/String     # "h264" or "h265"
-/camera/key_frame  std_msgs/Empty      # Request keyframe
+/recomo/film/zoom       std_msgs/Float32    # 1.0 - 10.0
+/recomo/film/ae_lock    std_msgs/Bool       # Auto exposure lock
+/recomo/film/awb_lock   std_msgs/Bool       # Auto white balance lock
+/recomo/film/switch     std_msgs/String     # "back" or "front"
+/recomo/film/bitrate    std_msgs/Int32      # bits/second
+/recomo/film/codec      std_msgs/String     # "h264" or "h265"
+/recomo/film/key_frame  std_msgs/Empty      # Request keyframe
 ```
 
 ## Orin Service Management
@@ -317,13 +317,13 @@ cd orin/
 ```
 
 **ROS2 Control Topics:**
-- `/camera/zoom` (Float32)
-- `/camera/ae_lock` (Bool)  
-- `/camera/awb_lock` (Bool)
-- `/camera/switch` (String: "back"/"front")
-- `/camera/bitrate` (Int32)
-- `/camera/codec` (String: "h264"/"h265")
-- `/camera/key_frame` (Empty)
+- `/recomo/film/zoom` (Float32)
+- `/recomo/film/ae_lock` (Bool)  
+- `/recomo/film/awb_lock` (Bool)
+- `/recomo/film/switch` (String: "back"/"front")
+- `/recomo/film/bitrate` (Int32)
+- `/recomo/film/codec` (String: "h264"/"h265")
+- `/recomo/film/key_frame` (Empty)
 
 **Test Controls:**
 ```bash
@@ -386,7 +386,7 @@ cd orin/
 
 - **Orin ROS2 Integration**
   - `camera_control_relay.py`: ROS2 topics → WebSocket commands
-  - 7 camera control topics (`/camera/zoom`, `/camera/switch`, etc.)
+  - 7 camera control topics (`/recomo/film/zoom`, `/recomo/film/switch`, etc.)
   - Comprehensive test script for all controls
   - JSON discriminator fix: `"type"` → `"cmd"` (Nov 2025)
 
@@ -460,7 +460,7 @@ cd orin/
 **H.265 decoder issues:**
 - Not all devices support HEVC hardware decode
 - Check `adb logcat | grep MediaCodec` for decoder errors
-- Fallback: Switch to H.264 via `ros2 topic pub --once /camera/codec std_msgs/String "data: 'h264'"`
+- Fallback: Switch to H.264 via `ros2 topic pub --once /recomo/film/codec std_msgs/String "data: 'h264'"`
 
 ## Changelog
 

@@ -35,45 +35,43 @@ The relay will subscribe to camera control topics and forward commands to the ph
 The relay subscribes to the following topics:
 
 | Topic | Message Type | Description | Example |
-|-------|--------------|-------------|---------|
-| `/camera/zoom` | `std_msgs/Float32` | Zoom ratio (1.0 - 10.0) | `1.5` |
-| `/camera/ae_lock` | `std_msgs/Bool` | Auto Exposure lock | `true` |
-| `/camera/awb_lock` | `std_msgs/Bool` | Auto White Balance lock | `false` |
-| `/camera/switch` | `std_msgs/String` | Camera facing | `"back"` or `"front"` |
-| `/camera/bitrate` | `std_msgs/Int32` | Bitrate in bps | `10000000` (10Mbps) |
-| `/camera/codec` | `std_msgs/String` | Video codec | `"h264"` or `"h265"` |
-| `/camera/key_frame` | `std_msgs/Empty` | Request key frame | (empty) |
-
-## Example Commands
+|-------|--------------|-------------|---------|  
+| `/recomo/film/zoom` | `std_msgs/Float32` | Zoom ratio (1.0 - 10.0) | `1.5` |
+| `/recomo/film/ae_lock` | `std_msgs/Bool` | Auto Exposure lock | `true` |
+| `/recomo/film/awb_lock` | `std_msgs/Bool` | Auto White Balance lock | `false` |
+| `/recomo/film/switch` | `std_msgs/String` | Camera facing | `"back"` or `"front"` |
+| `/recomo/film/bitrate` | `std_msgs/Int32` | Bitrate in bps | `10000000` (10Mbps) |
+| `/recomo/film/codec` | `std_msgs/String` | Video codec | `"h264"` or `"h265"` |
+| `/recomo/film/key_frame` | `std_msgs/Empty` | Request key frame | (empty) |## Example Commands
 
 ### Set zoom to 2.5x
 ```bash
-ros2 topic pub --once /camera/zoom std_msgs/Float32 "data: 2.5"
+ros2 topic pub --once /recomo/film/zoom std_msgs/Float32 "data: 2.5"
 ```
 
 ### Enable AE lock
 ```bash
-ros2 topic pub --once /camera/ae_lock std_msgs/Bool "data: true"
+ros2 topic pub --once /recomo/film/ae_lock std_msgs/Bool "data: true"
 ```
 
 ### Switch to front camera
 ```bash
-ros2 topic pub --once /camera/switch std_msgs/String "data: 'front'"
+ros2 topic pub --once /recomo/film/switch std_msgs/String "data: 'front'"
 ```
 
 ### Set bitrate to 15Mbps
 ```bash
-ros2 topic pub --once /camera/bitrate std_msgs/Int32 "data: 15000000"
+ros2 topic pub --once /recomo/film/bitrate std_msgs/Int32 "data: 15000000"
 ```
 
 ### Change codec to H.265
 ```bash
-ros2 topic pub --once /camera/codec std_msgs/String "data: 'h265'"
+ros2 topic pub --once /recomo/film/codec std_msgs/String "data: 'h265'"
 ```
 
 ### Request key frame
 ```bash
-ros2 topic pub --once /camera/key_frame std_msgs/Empty
+ros2 topic pub --once /recomo/film/key_frame std_msgs/Empty
 ```
 
 ## Integration Example
@@ -88,8 +86,8 @@ from std_msgs.msg import Float32, Bool
 class CameraController(Node):
     def __init__(self):
         super().__init__('camera_controller')
-        self.zoom_pub = self.create_publisher(Float32, '/camera/zoom', 10)
-        self.ae_lock_pub = self.create_publisher(Bool, '/camera/ae_lock', 10)
+        self.zoom_pub = self.create_publisher(Float32, '/recomo/film/zoom', 10)
+        self.ae_lock_pub = self.create_publisher(Bool, '/recomo/film/ae_lock', 10)
         
     def zoom_in(self, ratio: float):
         msg = Float32()
@@ -146,12 +144,12 @@ class CameraController(Node):
 
 ### Commands Not Working
 - Check phone app logs for received commands
-- Verify ROS2 topics are publishing: `ros2 topic echo /camera/zoom`
+- Verify ROS2 topics are publishing: `ros2 topic echo /recomo/film/zoom`
 - Ensure command values are in valid range (e.g., zoom 1.0-10.0)
 
 ### No Response from Relay
 - Check relay is running: `ros2 node list | grep camera_control_relay`
-- Verify topic subscriptions: `ros2 topic info /camera/zoom`
+- Verify topic subscriptions: `ros2 topic info /recomo/film/zoom`
 - Check relay logs for errors
 
 ## See Also
